@@ -36,6 +36,25 @@ func TestSelectionUnion(t *testing.T) {
 	}
 }
 
+func TestRepositoriesCarrySortedGroupMembership(t *testing.T) {
+	inv, err := New(map[string]string{"github.com/a/one": "", "github.com/a/two": ""}, map[string][]string{"tools": {"one", "one"}, "agents": {"github.com/a/one"}, "empty": {}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	repos, err := inv.Select(nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := [][]string{{"agents", "tools"}, nil}
+	for index, repo := range repos {
+		if !reflect.DeepEqual(repo.Groups, want[index]) {
+			t.Errorf("%s groups = %v, want %v", repo.ID, repo.Groups, want[index])
+		}
+	}
+}
+
 func TestAmbiguityUsesWholeInventory(t *testing.T) {
 	inv, err := New(map[string]string{"github.com/a/repo": "", "github.com/b/repo": "", "other.example/a/repo": ""}, map[string][]string{"a": {"github.com/a/repo"}})
 	if err != nil {

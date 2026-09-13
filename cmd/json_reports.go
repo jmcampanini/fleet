@@ -35,6 +35,22 @@ switch_branch, or update. A switch has from and to branch names. An update
 has from and to commits. A clone or create_branch has a to commit, which a
 clone whose verification failed early can omit.
 
+Repos report:
+  complete           Every selected repository was described without a
+                     topic retrieval error.
+  topics_fetched     Topics were requested from GitHub; false under
+                     --no-topics, where every topic list is empty.
+  results            One entry per selected repository, sorted by
+                     complete identity.
+
+Each entry carries repository, path, branch, groups, topics, and error.
+path is the expected checkout under CODE_DIR whether or not it exists.
+branch is the configured override, empty when the remote default applies.
+groups lists the configured group names containing the repository, sorted.
+topics lists the repository's GitHub topics, sorted, and is empty when they
+were not fetched or the fetch failed. error is present only for a failed
+topic retrieval and names --no-topics as the offline alternative.
+
 Issue and PR report:
   query              resource, state, sort, order, and limit in effect.
   complete           Every repository established enough candidates for
