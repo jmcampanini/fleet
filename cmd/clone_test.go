@@ -26,8 +26,8 @@ func TestCloneAllContinuesAfterFailureAndPreservesContent(t *testing.T) {
 
 	out, _, err := execute(t, "clone", "--all", "--config", configPath, "--json")
 
-	if err == nil || !json.Valid([]byte(out)) {
-		t.Fatalf("clone over non-checkout directories = %q, %v, want failure with a report", out, err)
+	if err == nil || !json.Valid([]byte(out)) || ExitCode(err) != ExitWork {
+		t.Fatalf("clone over non-checkout directories = %q, %v (exit %d), want a work failure with a report", out, err, ExitCode(err))
 	}
 	var report checkoutReport
 	if err := json.Unmarshal([]byte(out), &report); err != nil {

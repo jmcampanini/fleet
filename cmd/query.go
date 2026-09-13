@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/jmcampanini/fleet/internal/config"
 	"github.com/jmcampanini/fleet/internal/process"
 	"github.com/jmcampanini/fleet/internal/query"
 	"github.com/spf13/cobra"
@@ -16,62 +16,50 @@ import (
 type querySpec struct {
 	example  string
 	long     string
-	resource string
+	resource query.Resource
 	short    string
 }
 
 // newQuery builds a listing command; issues and prs share every flag,
 // the selection and ordering contract, and the report shape.
 func newQuery(spec querySpec) *cobra.Command {
-	var groups []string
+	var selection selection
 	var jsonOutput bool
-	options := query.Options{Resource: spec.resource, State: "open", Order: "desc"}
+	var state, sort, order string
 	command := &cobra.Command{
-		Use: spec.resource + " [repository ...]", Short: spec.short,
+		Use: string(spec.resource) + " [repository ...]", Short: spec.short,
 		Long:    spec.long + "\n\n" + queryHelp + "\n\n" + selectionHelp + "\n\n" + configHelp + "\n\n" + outputHelp,
 		Example: spec.example,
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, refs []string) error {
+			options := query.Options{Resource: spec.resource, State: query.State(state), Sort: query.Sort(sort), Order: query.Order(order)}
 			if err := options.Validate(); err != nil {
 				return err
 			}
-			path, err := configPath(cmd)
+			loaded, repos, err := selection.resolve(cmd, refs)
 			if err != nil {
 				return err
 			}
-			cfg, _, inv, err := config.Load(path, cmd.Root().PersistentFlags())
-			if err != nil {
-				return err
-			}
-			repos, err := inv.Select(refs, groups)
-			if err != nil {
-				return err
+			options.Limit = loaded.Config.Issues.Limit
+			if spec.resource == query.ResourcePRs {
+				options.Limit = loaded.Config.PRs.Limit
 			}
 
-			options.Limit = cfg.Issues.Limit
-			if spec.resource == "prs" {
-				options.Limit = cfg.PRs.Limit
-			}
-			if len(repos) == 0 {
-				if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "No repositories selected."); err != nil {
-					return err
-				}
-			}
 			report := (query.Client{Run: process.Execute}).List(cmd.Context(), repos, options)
 
 			if err := renderQuery(cmd, report, jsonOutput); err != nil {
-				return err
+				return workError{err}
 			}
 			if !report.Complete {
-				return fmt.Errorf("partial query results; see repository errors in the report")
+				return workError{errors.New("partial query results; see repository errors in the report")}
 			}
 			return nil
 		},
 	}
-	command.Flags().StringArrayVar(&groups, "group", nil, "Select one group; repeat for several groups")
-	command.Flags().StringVar(&options.State, "state", "open", "State: open, closed, all; prs also accepts merged")
-	command.Flags().StringVar(&options.Sort, "sort", "", "Sort: created, updated, closed; prs also accepts merged")
-	command.Flags().StringVar(&options.Order, "order", "desc", "Timestamp order: asc or desc")
+	selection.bind(command.Flags())
+	command.Flags().StringVar(&state, "state", string(query.StateOpen), "State: open, closed, all; prs also accepts merged")
+	command.Flags().StringVar(&sort, "sort", "", "Sort: created, updated, closed; prs also accepts merged")
+	command.Flags().StringVar(&order, "order", string(query.OrderDesc), "Timestamp order: asc or desc")
 	command.Flags().BoolVar(&jsonOutput, "json", false, "Emit a JSON report")
 	return command
 }

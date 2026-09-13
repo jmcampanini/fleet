@@ -44,12 +44,12 @@ composition; a later file can override branch and limit settings.
 			if err != nil {
 				return err
 			}
-			cfg, report, _, err := config.Load(path, cmd.Root().PersistentFlags())
+			loaded, err := config.Load(path, cmd.Root().PersistentFlags())
 			if err != nil {
 				return err
 			}
 
-			reporter := configreporter.New(cfg, report)
+			reporter := configreporter.New(loaded.Config, loaded.Report)
 			if err := reporter.WriteTOML(cmd.OutOrStdout()); err != nil {
 				return err
 			}

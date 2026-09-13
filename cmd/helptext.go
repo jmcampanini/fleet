@@ -22,8 +22,9 @@ const configHelp = `Configuration:
 
 const outputHelp = `Output and dependencies:
   Results go to stdout; diagnostics go to stderr. --json emits one JSON
-  report, including failures and completed actions. Partial or incomplete
-  results exit 1; success exits 0. Preflight errors leave stdout empty.
+  report, including failures and completed actions. Success exits 0.
+  Partial or incomplete results exit 1 after the report is written.
+  Preflight errors exit 2 and leave stdout empty.
   Commands do not prompt or read credentials from stdin. Git and gh must
   already be authenticated. Each subprocess has a 120-second timeout;
   Git SSH uses batch mode and a 15-second connection timeout.

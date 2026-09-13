@@ -43,7 +43,7 @@ func TestExitCodesTopicPrintsSameHelpFromBothEntryPoints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a != b || !strings.Contains(a, "0  Success") || !strings.Contains(a, "1  Any error") {
+	if a != b || !strings.Contains(a, "0  Success") || !strings.Contains(a, "1  Failure after") || !strings.Contains(a, "2  Failure before") {
 		t.Errorf("exit code help differs or lacks status rows:\n%s\n%s", a, b)
 	}
 }
@@ -76,8 +76,8 @@ func TestUsageErrorsPrecedeConfigAndWork(t *testing.T) {
 	t.Setenv("PATH", "")
 	for _, args := range [][]string{{"unknown"}, {"config", "extra"}, {"exit-codes", "extra"}, {"json-reports", "extra"}, {"clone"}, {"clone", "--all", "one"}, {"clone", "--all", "--group", "empty"}, {"sync", "--unknown"}, {"issues", "--state", "merged"}, {"prs", "--sort", "closed"}, {"issues", "--sort", "merged"}} {
 		out, _, err := execute(t, args...)
-		if err == nil || out != "" || strings.Contains(err.Error(), "load config") {
-			t.Errorf("execute(%v) = %q, %v", args, out, err)
+		if err == nil || out != "" || strings.Contains(err.Error(), "load config") || ExitCode(err) != ExitPreflight {
+			t.Errorf("execute(%v) = %q, %v (exit %d), want a preflight error", args, out, err, ExitCode(err))
 		}
 	}
 }
@@ -118,8 +118,8 @@ func TestSyncBatchJSONContinuesAfterFailure(t *testing.T) {
 	}
 	t.Setenv("CODE_DIR", root)
 	out, _, err := execute(t, "sync", "--config", configPath, "--json")
-	if err == nil || !json.Valid([]byte(out)) {
-		t.Fatalf("partial sync = %q, %v", out, err)
+	if err == nil || !json.Valid([]byte(out)) || ExitCode(err) != ExitWork {
+		t.Fatalf("partial sync = %q, %v (exit %d), want a work failure with a report", out, err, ExitCode(err))
 	}
 	var report checkoutReport
 	if err := json.Unmarshal([]byte(out), &report); err != nil {

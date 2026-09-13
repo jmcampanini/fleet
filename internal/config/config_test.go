@@ -30,18 +30,19 @@ func TestLayersAndProvenance(t *testing.T) {
 	if err := os.WriteFile(path, []byte("[issues]\nlimit = 20\n[repos.\"github.com/a/one\"]\nbranch = \"develop\"\n[repos.\"github.com/a/two\"]\n[groups]\nall = [\"one\", \"two\", \"a/one\"]\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cfg, report, inv, err := Load(path, flags(t, "--issues-limit", "30"))
+	loaded, err := Load(path, flags(t, "--issues-limit", "30"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	cfg := loaded.Config
 	if cfg.Issues.Limit != 30 || cfg.PRs.Limit != 26 {
 		t.Fatalf("limits = %d, %d, want 30, 26", cfg.Issues.Limit, cfg.PRs.Limit)
 	}
-	repos, err := inv.Select(nil, []string{"all"})
+	repos, err := loaded.Inventory.Select(nil, []string{"all"})
 	if err != nil || len(repos) != 2 || repos[0].Branch != "develop" {
 		t.Fatalf("composed inventory = %v, %v", repos, err)
 	}
-	rows := configreporter.New(cfg, report).ProvenanceRows()
+	rows := configreporter.New(cfg, loaded.Report).ProvenanceRows()
 	joined := ""
 	for _, row := range rows {
 		joined += strings.Join(row, " ") + "\n"
@@ -51,25 +52,24 @@ func TestLayersAndProvenance(t *testing.T) {
 			t.Errorf("provenance %q missing %q", joined, want)
 		}
 	}
-	body, err := configreporter.New(cfg, report).TOML()
+	body, err := configreporter.New(cfg, loaded.Report).TOML()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("FLEET_ISSUES_LIMIT", "")
-	t.Setenv("FLEET_PRS_LIMIT", "")
-	// Remove empty overrides: empty scalar environment values are invalid.
+	// Remove the overrides so the written file alone must reproduce the
+	// values; t.Setenv above restores them when the test ends.
 	if err := os.Unsetenv("FLEET_ISSUES_LIMIT"); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Unsetenv("FLEET_PRS_LIMIT"); err != nil {
 		t.Fatal(err)
 	}
-	roundtrip, _, _, err := Load(path, flags(t))
-	if err != nil || roundtrip.Issues.Limit != 30 || roundtrip.PRs.Limit != 26 {
-		t.Fatalf("roundtrip = %+v, %v", roundtrip, err)
+	roundtrip, err := Load(path, flags(t))
+	if err != nil || roundtrip.Config.Issues.Limit != 30 || roundtrip.Config.PRs.Limit != 26 {
+		t.Fatalf("roundtrip = %+v, %v", roundtrip.Config, err)
 	}
 }
 
@@ -77,7 +77,7 @@ func TestDiscoveryAndStrictValidation(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", root)
 	path := filepath.Join(root, "fleet", "fleet.toml")
-	if _, _, _, err := Load("", flags(t)); err == nil || !strings.Contains(err.Error(), path) {
+	if _, err := Load("", flags(t)); err == nil || !strings.Contains(err.Error(), path) {
 		t.Fatalf("missing default error = %v, want expected path", err)
 	}
 	if err := os.Mkdir(filepath.Dir(path), 0o700); err != nil {
@@ -87,19 +87,19 @@ func TestDiscoveryAndStrictValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if _, _, _, err := Load("", flags(t)); err == nil {
+		if _, err := Load("", flags(t)); err == nil {
 			t.Errorf("Load(%q) succeeded", body)
 		}
 	}
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cfg, _, inv, err := Load("", flags(t))
+	loaded, err := Load("", flags(t))
 	if err != nil {
 		t.Fatal(err)
 	}
-	repos, err := inv.Select(nil, nil)
-	if err != nil || len(repos) != 0 || cfg.Issues.Limit != 15 || cfg.PRs.Limit != 15 {
-		t.Fatalf("empty inventory/defaults = %+v, %v, %v", cfg, repos, err)
+	repos, err := loaded.Inventory.Select(nil, nil)
+	if err != nil || len(repos) != 0 || loaded.Config.Issues.Limit != 15 || loaded.Config.PRs.Limit != 15 {
+		t.Fatalf("empty inventory/defaults = %+v, %v, %v", loaded.Config, repos, err)
 	}
 }

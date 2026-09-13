@@ -1,5 +1,5 @@
-// Package sync maintains primary checkouts without discarding local work.
-package sync
+// Package checkout maintains primary checkouts without discarding local work.
+package checkout
 
 import (
 	"context"
@@ -16,9 +16,35 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// Status classifies one repository's outcome in a clone or sync report.
+type Status string
+
+// Sync reports current, updated, missing, planned, or failed. Clone reports
+// cloned, present, planned, or failed.
+const (
+	StatusCloned  Status = "cloned"
+	StatusCurrent Status = "current"
+	StatusFailed  Status = "failed"
+	StatusMissing Status = "missing"
+	StatusPlanned Status = "planned"
+	StatusPresent Status = "present"
+	StatusUpdated Status = "updated"
+)
+
+// Kind names one checkout change.
+type Kind string
+
+// Clone performs KindClone; sync performs the other kinds.
+const (
+	KindClone        Kind = "clone"
+	KindCreateBranch Kind = "create_branch"
+	KindSwitchBranch Kind = "switch_branch"
+	KindUpdate       Kind = "update"
+)
+
 // Action records one completed or planned checkout change.
 type Action struct {
-	Kind   string `json:"kind"`
+	Kind   Kind   `json:"kind"`
 	Branch string `json:"branch"`
 	From   string `json:"from,omitempty"`
 	To     string `json:"to,omitempty"`
@@ -30,7 +56,7 @@ type Result struct {
 	Path              string   `json:"path"`
 	Branch            string   `json:"branch"`
 	Commit            string   `json:"commit"`
-	Status            string   `json:"status"`
+	Status            Status   `json:"status"`
 	Actions           []Action `json:"actions"`
 	PlannedActions    []Action `json:"planned_actions"`
 	HistoryUnresolved bool     `json:"history_unresolved"`
@@ -66,7 +92,7 @@ func ValidateRoot(root string) error {
 func (c Client) Sync(ctx context.Context, root string, repo inventory.Repository, dryRun bool) Result {
 	r := newResult(root, repo)
 	if err := c.sync(ctx, root, repo, dryRun, &r); err != nil {
-		r.Status, r.Error = "failed", err.Error()
+		r.Status, r.Error = StatusFailed, err.Error()
 	}
 	return r
 }
@@ -77,7 +103,7 @@ func (c Client) Sync(ctx context.Context, root string, repo inventory.Repository
 func (c Client) Clone(ctx context.Context, root string, repo inventory.Repository, dryRun bool) Result {
 	r := newResult(root, repo)
 	if err := c.clone(ctx, root, repo, dryRun, &r); err != nil {
-		r.Status, r.Error = "failed", err.Error()
+		r.Status, r.Error = StatusFailed, err.Error()
 	}
 	return r
 }
@@ -87,8 +113,12 @@ func newResult(root string, repo inventory.Repository) Result {
 }
 
 // destinationEmpty reports whether the checkout path is absent or an empty
-// directory, after rejecting unsafe path components below root.
+// directory, after rejecting identities and path components that must not
+// reach the filesystem or a Git command line.
 func destinationEmpty(root, id, path string) (bool, error) {
+	if err := inventory.ValidateIdentity(id); err != nil {
+		return false, err
+	}
 	if err := checkPath(root, id); err != nil {
 		return false, err
 	}
@@ -108,7 +138,7 @@ func (c Client) sync(ctx context.Context, root string, repo inventory.Repository
 		return err
 	}
 	if missing {
-		r.Status = "missing"
+		r.Status = StatusMissing
 		return nil
 	}
 
@@ -160,19 +190,15 @@ func (c Client) sync(ctx context.Context, root string, repo inventory.Repository
 			}
 		}
 	}
+
+	plan := planActions(startingBranch, localCommit, r.Branch, r.Commit)
 	if dryRun {
-		r.Status = "planned"
-		if localCommit == "" {
-			r.PlannedActions = append(r.PlannedActions, Action{Kind: "create_branch", Branch: r.Branch, To: r.Commit})
-		}
-		if startingBranch != r.Branch {
-			r.PlannedActions = append(r.PlannedActions, Action{Kind: "switch_branch", Branch: r.Branch, From: startingBranch, To: r.Branch})
-		}
-		if localCommit != "" && localCommit != r.Commit {
-			r.PlannedActions = append(r.PlannedActions, Action{Kind: "update", Branch: r.Branch, From: localCommit, To: r.Commit})
-		}
+		r.Status, r.PlannedActions = StatusPlanned, plan
 		return nil
 	}
+
+	// The fetch above may have taken long enough for the user to touch the
+	// checkout; recheck the state the plan was built from before changing it.
 	branch, err := c.clean(ctx, r.Path)
 	if err != nil {
 		return err
@@ -187,30 +213,55 @@ func (c Client) sync(ctx context.Context, root string, repo inventory.Repository
 	if currentTarget != localCommit {
 		return fmt.Errorf("target branch changed during sync; inspect the checkout")
 	}
-	if localCommit == "" {
-		if _, err := c.Run(ctx, r.Path, "git", "branch", "--track", r.Branch, remoteRef); err != nil {
-			return fmt.Errorf("create target branch: %w", err)
+
+	for _, action := range plan {
+		if err := c.apply(ctx, r.Path, action); err != nil {
+			return err
 		}
-		r.Actions = append(r.Actions, Action{Kind: "create_branch", Branch: r.Branch, To: r.Commit})
-	}
-	if startingBranch != r.Branch {
-		if _, err := c.Run(ctx, r.Path, "git", "switch", "--no-guess", "--no-overwrite-ignore", r.Branch); err != nil {
-			return fmt.Errorf("switch target branch: %w", err)
-		}
-		r.Actions = append(r.Actions, Action{Kind: "switch_branch", Branch: r.Branch, From: startingBranch, To: r.Branch})
-	}
-	if localCommit != "" && localCommit != r.Commit {
-		if _, err := c.Run(ctx, r.Path, "git", "merge", "--ff-only", "--no-autostash", "--no-overwrite-ignore", r.Commit); err != nil {
-			return fmt.Errorf("fast-forward target branch: %w", err)
-		}
-		r.Actions = append(r.Actions, Action{Kind: "update", Branch: r.Branch, From: localCommit, To: r.Commit})
+		r.Actions = append(r.Actions, action)
 	}
 	if err := c.verify(ctx, repo.ID, r); err != nil {
 		return err
 	}
-	r.Status = "current"
+	r.Status = StatusCurrent
 	if len(r.Actions) > 0 {
-		r.Status = "updated"
+		r.Status = StatusUpdated
+	}
+	return nil
+}
+
+// planActions is the single source of the actions a sync performs; a dry
+// run reports the plan and a real run executes it in order.
+func planActions(startingBranch, localCommit, branch, commit string) []Action {
+	plan := []Action{}
+	if localCommit == "" {
+		plan = append(plan, Action{Kind: KindCreateBranch, Branch: branch, To: commit})
+	}
+	if startingBranch != branch {
+		plan = append(plan, Action{Kind: KindSwitchBranch, Branch: branch, From: startingBranch, To: branch})
+	}
+	if localCommit != "" && localCommit != commit {
+		plan = append(plan, Action{Kind: KindUpdate, Branch: branch, From: localCommit, To: commit})
+	}
+	return plan
+}
+
+func (c Client) apply(ctx context.Context, path string, action Action) error {
+	switch action.Kind {
+	case KindCreateBranch:
+		if _, err := c.Run(ctx, path, "git", "branch", "--track", action.Branch, "refs/remotes/origin/"+action.Branch); err != nil {
+			return fmt.Errorf("create target branch: %w", err)
+		}
+	case KindSwitchBranch:
+		if _, err := c.Run(ctx, path, "git", "switch", "--no-guess", "--no-overwrite-ignore", action.To); err != nil {
+			return fmt.Errorf("switch target branch: %w", err)
+		}
+	case KindUpdate:
+		if _, err := c.Run(ctx, path, "git", "merge", "--ff-only", "--no-autostash", "--no-overwrite-ignore", action.To); err != nil {
+			return fmt.Errorf("fast-forward target branch: %w", err)
+		}
+	default:
+		return fmt.Errorf("sync cannot apply action %q", action.Kind)
 	}
 	return nil
 }
@@ -294,7 +345,7 @@ func originIdentity(origin string) string {
 	if err != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && u.Scheme != "ssh") {
 		return ""
 	}
-	return u.Host + "/" + strings.TrimPrefix(u.Path, "/")
+	return u.Hostname() + "/" + strings.TrimPrefix(u.Path, "/")
 }
 
 func (c Client) clean(ctx context.Context, path string) (string, error) {
@@ -392,8 +443,8 @@ func (c Client) clone(ctx context.Context, root string, repo inventory.Repositor
 		return err
 	}
 	if dryRun {
-		r.Status = "planned"
-		r.PlannedActions = append(r.PlannedActions, Action{Kind: "clone", Branch: r.Branch, To: r.Commit})
+		r.Status = StatusPlanned
+		r.PlannedActions = append(r.PlannedActions, Action{Kind: KindClone, Branch: r.Branch, To: r.Commit})
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(r.Path), 0o755); err != nil {
@@ -402,7 +453,7 @@ func (c Client) clone(ctx context.Context, root string, repo inventory.Repositor
 	if _, err := c.Run(ctx, root, "git", "clone", "--no-recurse-submodules", "--origin", "origin", "--branch", r.Branch, "--", address, r.Path); err != nil {
 		return fmt.Errorf("clone failed; inspect any partial destination at %q before rerunning: %w", r.Path, err)
 	}
-	r.Actions = append(r.Actions, Action{Kind: "clone", Branch: r.Branch})
+	r.Actions = append(r.Actions, Action{Kind: KindClone, Branch: r.Branch})
 	// The branch can advance between discovery and cloning.
 	r.Commit, err = c.Run(ctx, r.Path, "git", "rev-parse", "--verify", "refs/remotes/origin/"+r.Branch+"^{commit}")
 	if err != nil {
@@ -412,7 +463,7 @@ func (c Client) clone(ctx context.Context, root string, repo inventory.Repositor
 	if err := c.verify(ctx, repo.ID, r); err != nil {
 		return err
 	}
-	r.Status = "cloned"
+	r.Status = StatusCloned
 	return nil
 }
 
@@ -431,7 +482,7 @@ func (c Client) present(ctx context.Context, id string, r *Result) error {
 	if err != nil {
 		return err
 	}
-	r.Branch, r.Commit, r.Status = branch, commit, "present"
+	r.Branch, r.Commit, r.Status = branch, commit, StatusPresent
 	return nil
 }
 

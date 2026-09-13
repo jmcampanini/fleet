@@ -37,37 +37,46 @@ func defaults() Config {
 	return Config{Issues: Issues{Limit: 15}, PRs: PRs{Limit: 15}}
 }
 
-// Load applies defaults, one required file, environment, then root flags.
-func Load(path string, flags *pflag.FlagSet) (Config, configloader.LoadReport, inventory.Inventory, error) {
+// Loaded is the validated outcome of one configuration load.
+type Loaded struct {
+	Config    Config
+	Inventory inventory.Inventory
+	Report    configloader.LoadReport
+}
+
+// Load applies defaults, one required file, environment, then root flags,
+// and validates the inventory before returning.
+func Load(path string, flags *pflag.FlagSet) (Loaded, error) {
 	if path == "" {
 		helper, err := configloader.NewFileHelper("fleet", "fleet.toml")
 		if err != nil {
-			return Config{}, configloader.LoadReport{}, inventory.Inventory{}, err
+			return Loaded{}, err
 		}
 		paths := helper.XDGConfigFile()
 		if len(paths) == 0 {
-			return Config{}, configloader.LoadReport{}, inventory.Inventory{}, fmt.Errorf("cannot discover configuration; supply --config PATH")
+			return Loaded{}, fmt.Errorf("cannot discover configuration; supply --config PATH")
 		}
 		path = paths[0]
 	}
+
 	fileLoader, err := configloader.NewRequiredFileLoader[Config](path)
 	if err != nil {
-		return Config{}, configloader.LoadReport{}, inventory.Inventory{}, fmt.Errorf("load config %q; create this TOML file or use --config PATH: %w", path, err)
+		return Loaded{}, fmt.Errorf("load config %q; create this TOML file or use --config PATH: %w", path, err)
 	}
 	envLoader, err := configloader.NewEnvironmentLoader[Config]("fleet", configloader.OSEnv())
 	if err != nil {
-		return Config{}, configloader.LoadReport{}, inventory.Inventory{}, err
+		return Loaded{}, err
 	}
 	flagLoader, err := pflagloader.NewLoader[Config](flags)
 	if err != nil {
-		return Config{}, configloader.LoadReport{}, inventory.Inventory{}, err
+		return Loaded{}, err
 	}
 	cfg, report, err := configloader.Load(defaults(), fileLoader, envLoader, flagLoader)
 	if err != nil {
-		return Config{}, configloader.LoadReport{}, inventory.Inventory{}, fmt.Errorf("load config %q: %w", path, err)
+		return Loaded{}, fmt.Errorf("load config %q: %w", path, err)
 	}
 	if cfg.Issues.Limit <= 0 || cfg.PRs.Limit <= 0 {
-		return Config{}, configloader.LoadReport{}, inventory.Inventory{}, fmt.Errorf("issues.limit and prs.limit must be positive integers")
+		return Loaded{}, fmt.Errorf("issues.limit and prs.limit must be positive integers")
 	}
 
 	branches := make(map[string]string, len(cfg.Repos))
@@ -76,7 +85,7 @@ func Load(path string, flags *pflag.FlagSet) (Config, configloader.LoadReport, i
 	}
 	inv, err := inventory.New(branches, cfg.Groups)
 	if err != nil {
-		return Config{}, configloader.LoadReport{}, inventory.Inventory{}, err
+		return Loaded{}, err
 	}
-	return cfg, report, inv, nil
+	return Loaded{Config: cfg, Inventory: inv, Report: report}, nil
 }
