@@ -21,8 +21,10 @@ const configHelp = `Configuration:
   Fleet does not run Overlay or discover profiles.`
 
 const outputHelp = `Output and dependencies:
-  Results go to stdout; diagnostics go to stderr. --json emits one JSON
-  report, including failures and completed actions. Success exits 0.
+  Results go to stdout; diagnostics go to stderr. clone and sync print one
+  line per repository as soon as it finishes, then a summary line. --json
+  instead emits one JSON report after all work, including failures and
+  completed actions. Success exits 0.
   Partial or incomplete results exit 1 after the report is written.
   Preflight errors exit 2 and leave stdout empty.
   Commands do not prompt or read credentials from stdin. Git and gh must

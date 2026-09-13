@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -32,10 +33,12 @@ type checkoutRun struct {
 	step       checkoutStep
 }
 
-// runCheckout resolves the selection once, applies the step to every selected
-// repository, renders one report, and fails when any result failed.
+// runCheckout resolves the selection once and applies the step to every
+// selected repository. Human output reports each repository as soon as its
+// step returns, then a summary; --json emits one report after all work. The
+// command fails when any result failed.
 func runCheckout(cmd *cobra.Command, run checkoutRun) error {
-	_, repos, err := run.selection.resolve(cmd, run.refs)
+	loaded, repos, err := run.selection.resolve(cmd, run.refs)
 	if err != nil {
 		return err
 	}
@@ -57,9 +60,19 @@ func runCheckout(cmd *cobra.Command, run checkoutRun) error {
 		}
 		report.Results = append(report.Results, result)
 		report.Complete = report.Complete && result.Error == ""
+		if !run.jsonOutput {
+			if err := writeResult(cmd.OutOrStdout(), loaded.Inventory.Label(repo.ID), result); err != nil {
+				return workError{err}
+			}
+		}
 	}
 
-	if err := renderCheckout(cmd, report, run.jsonOutput); err != nil {
+	if run.jsonOutput {
+		err = json.NewEncoder(cmd.OutOrStdout()).Encode(report)
+	} else {
+		err = writeSummary(cmd.OutOrStdout(), report)
+	}
+	if err != nil {
 		return workError{err}
 	}
 	if !report.Complete {
@@ -68,86 +81,110 @@ func runCheckout(cmd *cobra.Command, run checkoutRun) error {
 	return nil
 }
 
-func renderCheckout(cmd *cobra.Command, report checkoutReport, jsonOutput bool) error {
-	if jsonOutput {
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(report)
+// writeResult prints one repository as a marked line: a check for finished
+// work, an arrow for a dry-run plan, and a cross for a missing or failed
+// checkout. Extra lines of an error follow, indented.
+func writeResult(out io.Writer, label string, result checkout.Result) error {
+	marker, detail := "✓", ""
+	name := label
+	if result.Branch != "" {
+		name += " (" + result.Branch + ")"
 	}
+	completed := describeActions(result.Actions, false)
 
-	var out strings.Builder
-	rows := make([][]string, 0, len(report.Results))
-	counts := make(map[checkout.Status]int)
-	for _, result := range report.Results {
-		rows = append(rows, []string{string(result.Status), result.Repository, result.Branch, resultCommit(result), resultDetail(result)})
-		counts[result.Status]++
-	}
-	writeColumns(&out, rows)
-
-	var summary []string
-	for _, status := range []checkout.Status{checkout.StatusCurrent, checkout.StatusUpdated, checkout.StatusCloned, checkout.StatusPresent, checkout.StatusPlanned, checkout.StatusMissing, checkout.StatusFailed} {
-		if counts[status] > 0 {
-			summary = append(summary, fmt.Sprintf("%d %s", counts[status], status))
+	switch result.Status {
+	case checkout.StatusCurrent:
+		detail = "up to date at " + shortCommit(result.Commit)
+	case checkout.StatusPresent:
+		detail = "already present at " + shortCommit(result.Commit)
+	case checkout.StatusCloned, checkout.StatusUpdated:
+		detail = strings.Join(completed, ", ")
+	case checkout.StatusPlanned:
+		marker = "→"
+		detail = "up to date at " + shortCommit(result.Commit)
+		if len(result.PlannedActions) > 0 {
+			detail = "would " + strings.Join(describeActions(result.PlannedActions, true), ", ")
+		}
+		if result.HistoryUnresolved {
+			detail += "; history unresolved"
+		}
+	case checkout.StatusMissing:
+		marker = "✗"
+		detail = fmt.Sprintf("not cloned; run 'fleet clone %s'", label)
+	case checkout.StatusFailed:
+		marker = "✗"
+		detail = firstLine(result.Error)
+		if len(completed) > 0 {
+			detail = strings.Join(completed, ", ") + "; " + detail
 		}
 	}
-	fmt.Fprint(&out, countNoun(len(report.Results), "repository", "repositories"))
-	if len(summary) > 0 {
-		fmt.Fprintf(&out, ": %s", strings.Join(summary, ", "))
+
+	var line strings.Builder
+	fmt.Fprintf(&line, "%s %s: %s\n", marker, name, detail)
+	if result.Status == checkout.StatusFailed {
+		for _, extra := range strings.Split(result.Error, "\n")[1:] {
+			fmt.Fprintf(&line, "    %s\n", extra)
+		}
 	}
-	if report.DryRun {
-		fmt.Fprint(&out, " (dry run)")
-	}
-	fmt.Fprintln(&out)
-	_, err := fmt.Fprint(cmd.OutOrStdout(), out.String())
+	_, err := io.WriteString(out, line.String())
 	return err
 }
 
-// resultCommit shows an update as its commit range and anything else as the
-// observed commit, abbreviated.
-func resultCommit(result checkout.Result) string {
-	for _, action := range append(append([]checkout.Action{}, result.Actions...), result.PlannedActions...) {
-		if action.Kind == checkout.KindUpdate {
-			return shortCommit(action.From) + " -> " + shortCommit(action.To)
+// describeActions puts actions into words in the order they run, as a plan
+// ("switch from main") or as completed work ("switched from main").
+func describeActions(actions []checkout.Action, planned bool) []string {
+	var words []string
+	for _, action := range actions {
+		var plan, done, object string
+		switch action.Kind {
+		case checkout.KindClone:
+			plan, done, object = "clone at", "cloned at", shortCommit(action.To)
+		case checkout.KindCreateBranch:
+			plan, done, object = "create branch", "created branch", action.Branch
+		case checkout.KindSwitchBranch:
+			plan, done, object = "switch from", "switched from", action.From
+		case checkout.KindUpdate:
+			plan, done, object = "update", "updated", shortCommit(action.From)+" -> "+shortCommit(action.To)
+		default:
+			plan, done = string(action.Kind), string(action.Kind)
 		}
+		verb := done
+		if planned {
+			verb = plan
+		}
+		words = append(words, strings.TrimSpace(verb+" "+object))
 	}
-	return shortCommit(result.Commit)
+	return words
 }
 
-// resultDetail describes completed branch changes, planned work, the clone
-// hint for a missing checkout, and the first line of any error.
-func resultDetail(result checkout.Result) string {
-	var completed, planned, parts []string
-	for _, action := range result.Actions {
-		switch action.Kind {
-		case checkout.KindSwitchBranch:
-			completed = append(completed, "switched from "+action.From)
-		case checkout.KindCreateBranch:
-			completed = append(completed, "created branch "+action.Branch)
-		}
+// writeSummary counts the results by status in words.
+func writeSummary(out io.Writer, report checkoutReport) error {
+	counts := make(map[checkout.Status]int)
+	for _, result := range report.Results {
+		counts[result.Status]++
 	}
-	for _, action := range result.PlannedActions {
-		switch action.Kind {
-		case checkout.KindSwitchBranch:
-			planned = append(planned, "switch from "+action.From)
-		case checkout.KindCreateBranch:
-			planned = append(planned, "create branch "+action.Branch)
-		default:
-			planned = append(planned, string(action.Kind))
+	var summary []string
+	for _, entry := range []struct {
+		status checkout.Status
+		word   string
+	}{
+		{checkout.StatusCurrent, "up to date"}, {checkout.StatusUpdated, "updated"}, {checkout.StatusCloned, "cloned"}, {checkout.StatusPresent, "present"},
+		{checkout.StatusPlanned, "planned"}, {checkout.StatusMissing, "missing"}, {checkout.StatusFailed, "failed"},
+	} {
+		if counts[entry.status] > 0 {
+			summary = append(summary, fmt.Sprintf("%d %s", counts[entry.status], entry.word))
 		}
 	}
 
-	if len(completed) > 0 {
-		parts = append(parts, strings.Join(completed, ", "))
+	var line strings.Builder
+	line.WriteString(countNoun(len(report.Results), "repository", "repositories"))
+	if len(summary) > 0 {
+		fmt.Fprintf(&line, ": %s", strings.Join(summary, ", "))
 	}
-	if len(planned) > 0 {
-		parts = append(parts, strings.Join(planned, ", "))
+	if report.DryRun {
+		line.WriteString(" (dry run)")
 	}
-	if result.HistoryUnresolved {
-		parts = append(parts, "history unresolved")
-	}
-	if result.Status == checkout.StatusMissing {
-		parts = append(parts, fmt.Sprintf("run 'fleet clone %s'", result.Repository))
-	}
-	if result.Error != "" {
-		parts = append(parts, firstLine(result.Error))
-	}
-	return strings.Join(parts, "; ")
+	line.WriteByte('\n')
+	_, err := io.WriteString(out, line.String())
+	return err
 }

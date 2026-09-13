@@ -42,7 +42,7 @@ actions. A successful preview does not guarantee that sync will succeed.
 
 Verify origin, branch, commit, and cleanliness after changes. Report branch
 creation, switches, and updates separately. Continue after repository
-failures; completed actions remain in place and appear in the final report.
+failures; completed actions remain in place and appear in the report.
 The configuration and selection are loaded once, even if a synced repository
 contains Overlay sources.
 

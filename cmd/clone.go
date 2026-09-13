@@ -35,7 +35,7 @@ existing checkout; use 'fleet sync' for that.
 
 --dry-run queries remote refs and checks the destination without creating
 directories or cloning. Continue after repository failures; completed
-clones remain in place and appear in the final report.
+clones remain in place and appear in the report.
 
 ` + selectionHelp + "\n\n" + configHelp + "\n\n" + outputHelp,
 		Example: `  fleet clone --all

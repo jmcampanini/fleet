@@ -129,6 +129,19 @@ func (inv Inventory) Select(refs, groups []string) ([]Repository, error) {
 	return repos, nil
 }
 
+// Label returns the shortest reference that selects id unambiguously: the
+// repository name, org/repo, or the complete identity.
+func (inv Inventory) Label(id string) string {
+	parts := strings.Split(id, "/")
+	for i := len(parts) - 1; i > 0; i-- {
+		ref := strings.Join(parts[i:], "/")
+		if resolved, err := inv.resolve(ref); err == nil && resolved == id {
+			return ref
+		}
+	}
+	return id
+}
+
 func (inv Inventory) resolve(ref string) (string, error) {
 	var matches []string
 	for id := range inv.repos {
