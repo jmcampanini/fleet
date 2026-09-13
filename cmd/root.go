@@ -15,15 +15,17 @@ var Version = "dev"
 // NewRoot constructs a fresh command tree without performing command work.
 func NewRoot() *cobra.Command {
 	root := &cobra.Command{
-		Use: "fleet", Short: "Clone and sync repositories and list their issues and pull requests",
+		Use: "fleet", Short: "Clone, sync, and describe repositories and list their issues and PRs",
 		Long: `Fleet clones configured primary Git checkouts, keeps them on their intended
 branches, and lists issues and pull requests across the same inventory.
 clone and sync are separate commands: sync never clones, and clone never
-updates an existing checkout.
+updates an existing checkout. repos describes the inventory itself, with
+each repository's path, groups, and GitHub topics.
 
 ` + configHelp + "\n\n" + selectionHelp + "\n\n" + outputHelp,
 		Example: `  fleet clone --all
   fleet sync gibson molly --group clis --dry-run
+  fleet repos --json
   fleet issues --issues-limit 30
   fleet prs --state merged
   fleet config --provenance`,
@@ -35,7 +37,7 @@ updates an existing checkout.
 		// Registration depends only on this package's static configuration type.
 		panic(err)
 	}
-	root.AddCommand(newConfig(), newClone(), newSync(), newIssues(), newPRs(), exitCodesTopic(), jsonReportsTopic())
+	root.AddCommand(newConfig(), newClone(), newSync(), newRepos(), newIssues(), newPRs(), exitCodesTopic(), jsonReportsTopic())
 	return root
 }
 
