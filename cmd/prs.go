@@ -1,10 +1,13 @@
 package cmd
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/jmcampanini/fleet/internal/query"
+	"github.com/spf13/cobra"
+)
 
 func newPRs() *cobra.Command {
 	return newQuery(querySpec{
-		resource: "prs",
+		resource: query.ResourcePRs,
 		short:    "List pull requests across the selected repositories",
 		long: `List pull requests across the configured selection. Issues are excluded.
 Zero matching items succeeds.`,

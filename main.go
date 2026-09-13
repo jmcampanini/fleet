@@ -16,6 +16,6 @@ func main() {
 	defer stop()
 	if err := cmd.NewRoot().ExecuteContext(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "fleet: %s\n", err)
-		os.Exit(1)
+		os.Exit(cmd.ExitCode(err))
 	}
 }

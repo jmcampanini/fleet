@@ -1,6 +1,14 @@
 package cmd
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
+	"reflect"
+	"strings"
+
+	"github.com/jmcampanini/fleet/internal/checkout"
+	"github.com/jmcampanini/fleet/internal/query"
+	"github.com/spf13/cobra"
+)
 
 func jsonReportsTopic() *cobra.Command {
 	return &cobra.Command{
@@ -10,53 +18,77 @@ newline to stdout after repository work finishes, including on failure.
 Field names are lowercase with underscores. Empty arrays are [], never
 null. Optional strings are omitted when absent. Timestamps are RFC 3339
 strings; a missing event timestamp is null. Consumers should tolerate
-added fields.
+added fields. The field tables below are generated from the report types.
 
 Clone and sync report:
-  complete           Every selected repository finished without error.
-                     Checkouts that sync reports missing do not clear it.
-  dry_run            The report describes a preview.
-  results            One result per selected repository, sorted by
-                     complete identity.
+` + fieldTable(checkoutReport{}) + `
 
 Each result:
-  repository, path   Configured complete identity and primary checkout path.
-  branch, commit     Target branch and observed commit; empty if unknown.
-  status             sync: current, updated, missing, planned, or failed.
-                     clone: cloned, present, planned, or failed. A
-                     branch-only change is updated.
-  actions            Completed actions in execution order, retained after
-                     a later failure.
-  planned_actions    Intended actions of a dry run; empty otherwise.
-  history_unresolved A dry run lacked the Git objects needed to compare
-                     target history; planned updates remain conditional.
-  error              Failure reason, present only for failed repositories.
+` + fieldTable(checkout.Result{}) + `
 
-Each action has kind and branch. kind is clone, create_branch,
-switch_branch, or update. A switch has from and to branch names. An update
-has from and to commits. A clone or create_branch has a to commit, which a
-clone whose verification failed early can omit.
+Each action:
+` + fieldTable(checkout.Action{}) + `
 
 Issue and PR report:
-  query              resource, state, sort, order, and limit in effect.
-  complete           Every repository established enough candidates for
-                     the requested global ordering. An incomplete report is
-                     not the newest or oldest across the selection.
-  items              Matching items after deduplication, ordering, and the
-                     limit.
-  repositories       repository, complete, and optional error for each
-                     queried repository.
+` + fieldTable(query.Report{}) + `
+
+The query object:
+` + fieldTable(query.Options{}) + `
 
 Each item:
-  repository         Configured complete identity.
-  number, title, url Item number, title, and canonical URL.
-  state              open, closed, or merged.
-  state_reason       GitHub's issue state reason verbatim, such as
-                     COMPLETED or NOT_PLANNED. Omitted for pull requests.
-  created_at,        Creation and update timestamps.
-  updated_at
-  closed_at,         Event timestamps or null; merged_at is null for
-  merged_at          issues and unmerged pull requests.`,
+` + fieldTable(query.Item{}) + `
+
+Each repositories entry:
+` + fieldTable(query.RepositoryResult{}),
 		RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
+}
+
+// Help columns: two spaces, the JSON name padded to nameWidth, one space,
+// then the description wrapped so no line exceeds helpWidth.
+const (
+	helpWidth = 80
+	nameWidth = 18
+)
+
+// fieldTable renders one help line per exported field of a report struct,
+// taking the name from the json tag and the description from the help tag.
+// A field missing either tag is a programmer error caught by the help tests.
+func fieldTable(report any) string {
+	var lines []string
+	kind := reflect.TypeOf(report)
+	for index := range kind.NumField() {
+		field := kind.Field(index)
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		help := field.Tag.Get("help")
+		if name == "" || help == "" {
+			panic(fmt.Sprintf("%s.%s needs json and help tags for the json-reports topic", kind.Name(), field.Name))
+		}
+		indent := strings.Repeat(" ", nameWidth+3)
+		for row, text := range wrap(help, helpWidth-len(indent)) {
+			if row == 0 {
+				lines = append(lines, fmt.Sprintf("  %-*s %s", nameWidth, name, text))
+				continue
+			}
+			lines = append(lines, indent+text)
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// wrap breaks text at spaces into lines of at most width characters.
+func wrap(text string, width int) []string {
+	var lines []string
+	var line string
+	for _, word := range strings.Fields(text) {
+		if line != "" && len(line)+1+len(word) > width {
+			lines = append(lines, line)
+			line = ""
+		}
+		if line != "" {
+			line += " "
+		}
+		line += word
+	}
+	return append(lines, line)
 }

@@ -1,13 +1,13 @@
 package cmd
 
 import (
+	"github.com/jmcampanini/fleet/internal/checkout"
 	"github.com/jmcampanini/fleet/internal/process"
-	reposync "github.com/jmcampanini/fleet/internal/sync"
 	"github.com/spf13/cobra"
 )
 
 func newSync() *cobra.Command {
-	var groups []string
+	var selection selection
 	var dryRun, jsonOutput bool
 	command := &cobra.Command{
 		Use: "sync [repository ...]", Short: "Fast-forward existing checkouts to their target branches",
@@ -52,11 +52,11 @@ contains Overlay sources.
   fleet sync --group personal-agent --dry-run --json`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, refs []string) error {
-			client := reposync.Client{Run: process.Execute}
-			return runCheckout(cmd, checkoutRun{dryRun: dryRun, groups: groups, jsonOutput: jsonOutput, refs: refs, step: client.Sync})
+			client := checkout.Client{Run: process.Execute}
+			return runCheckout(cmd, checkoutRun{dryRun: dryRun, jsonOutput: jsonOutput, refs: refs, selection: selection, step: client.Sync})
 		},
 	}
-	command.Flags().StringArrayVar(&groups, "group", nil, "Select one group; repeat for several groups")
+	selection.bind(command.Flags())
 	command.Flags().BoolVar(&dryRun, "dry-run", false, "Inspect and plan without changing local state")
 	command.Flags().BoolVar(&jsonOutput, "json", false, "Emit a JSON report")
 	return command
