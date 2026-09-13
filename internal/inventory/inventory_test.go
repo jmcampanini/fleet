@@ -71,6 +71,25 @@ func TestAmbiguityUsesWholeInventory(t *testing.T) {
 	}
 }
 
+func TestLabelIsShortestUnambiguousReference(t *testing.T) {
+	inv, err := New(map[string]string{"github.com/a/repo": "", "github.com/b/repo": "", "other.example/a/repo": "", "github.com/a/unique": ""}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]string{
+		"github.com/a/unique":  "unique",
+		"github.com/b/repo":    "b/repo",
+		"github.com/a/repo":    "github.com/a/repo",
+		"other.example/a/repo": "other.example/a/repo",
+		"github.com/c/absent":  "github.com/c/absent",
+	}
+	for id, want := range cases {
+		if got := inv.Label(id); got != want {
+			t.Errorf("Label(%q) = %q, want %q", id, got, want)
+		}
+	}
+}
+
 func TestInvalidInventoryAndSelection(t *testing.T) {
 	if _, err := New(map[string]string{"github.com/example/.github": ""}, nil); err != nil {
 		t.Fatalf("valid dot-prefixed repository was rejected: %v", err)
