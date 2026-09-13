@@ -74,22 +74,80 @@ func renderCheckout(cmd *cobra.Command, report checkoutReport, jsonOutput bool) 
 	}
 
 	var out strings.Builder
+	rows := make([][]string, 0, len(report.Results))
+	counts := make(map[checkout.Status]int)
 	for _, result := range report.Results {
-		fmt.Fprintf(&out, "%s %s path=%q branch=%q commit=%s\n", result.Status, result.Repository, result.Path, result.Branch, result.Commit)
-		for _, action := range result.Actions {
-			fmt.Fprintf(&out, "  completed %s branch=%q from=%q to=%q\n", action.Kind, action.Branch, action.From, action.To)
-		}
-		for _, action := range result.PlannedActions {
-			fmt.Fprintf(&out, "  planned %s branch=%q from=%q to=%q\n", action.Kind, action.Branch, action.From, action.To)
-		}
-		if result.HistoryUnresolved {
-			fmt.Fprintln(&out, "  history check unresolved; sync must fetch objects before checking")
-		}
-		if result.Error != "" {
-			fmt.Fprintf(&out, "  error: %q\n", result.Error)
+		rows = append(rows, []string{string(result.Status), result.Repository, result.Branch, resultCommit(result), resultDetail(result)})
+		counts[result.Status]++
+	}
+	writeColumns(&out, rows)
+
+	var summary []string
+	for _, status := range []checkout.Status{checkout.StatusCurrent, checkout.StatusUpdated, checkout.StatusCloned, checkout.StatusPresent, checkout.StatusPlanned, checkout.StatusMissing, checkout.StatusFailed} {
+		if counts[status] > 0 {
+			summary = append(summary, fmt.Sprintf("%d %s", counts[status], status))
 		}
 	}
-	fmt.Fprintf(&out, "repositories=%d complete=%t dry_run=%t\n", len(report.Results), report.Complete, report.DryRun)
+	fmt.Fprint(&out, countNoun(len(report.Results), "repository", "repositories"))
+	if len(summary) > 0 {
+		fmt.Fprintf(&out, ": %s", strings.Join(summary, ", "))
+	}
+	if report.DryRun {
+		fmt.Fprint(&out, " (dry run)")
+	}
+	fmt.Fprintln(&out)
 	_, err := fmt.Fprint(cmd.OutOrStdout(), out.String())
 	return err
+}
+
+// resultCommit shows an update as its commit range and anything else as the
+// observed commit, abbreviated.
+func resultCommit(result checkout.Result) string {
+	for _, action := range append(append([]checkout.Action{}, result.Actions...), result.PlannedActions...) {
+		if action.Kind == checkout.KindUpdate {
+			return shortCommit(action.From) + " -> " + shortCommit(action.To)
+		}
+	}
+	return shortCommit(result.Commit)
+}
+
+// resultDetail describes completed branch changes, planned work, the clone
+// hint for a missing checkout, and the first line of any error.
+func resultDetail(result checkout.Result) string {
+	var completed, planned, parts []string
+	for _, action := range result.Actions {
+		switch action.Kind {
+		case checkout.KindSwitchBranch:
+			completed = append(completed, "switched from "+action.From)
+		case checkout.KindCreateBranch:
+			completed = append(completed, "created branch "+action.Branch)
+		}
+	}
+	for _, action := range result.PlannedActions {
+		switch action.Kind {
+		case checkout.KindSwitchBranch:
+			planned = append(planned, "switch from "+action.From)
+		case checkout.KindCreateBranch:
+			planned = append(planned, "create branch "+action.Branch)
+		default:
+			planned = append(planned, string(action.Kind))
+		}
+	}
+
+	if len(completed) > 0 {
+		parts = append(parts, strings.Join(completed, ", "))
+	}
+	if len(planned) > 0 {
+		parts = append(parts, strings.Join(planned, ", "))
+	}
+	if result.HistoryUnresolved {
+		parts = append(parts, "history unresolved")
+	}
+	if result.Status == checkout.StatusMissing {
+		parts = append(parts, fmt.Sprintf("run 'fleet clone %s'", result.Repository))
+	}
+	if result.Error != "" {
+		parts = append(parts, firstLine(result.Error))
+	}
+	return strings.Join(parts, "; ")
 }

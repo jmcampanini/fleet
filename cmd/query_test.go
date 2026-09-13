@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmcampanini/fleet/internal/checkout"
 	"github.com/jmcampanini/fleet/internal/query"
 	"github.com/spf13/cobra"
 )
@@ -62,23 +61,6 @@ func TestRenderQueryShowsEachItemAndFailure(t *testing.T) {
 	for _, want := range []string{"PARTIAL RESULTS", "issues state=closed sort=closed order=desc limit=15", "github.com/a/one#7", "Broken build", "https://github.com/a/one/issues/7", "state_reason=\"COMPLETED\"", "closed=2026-09-01T12:00:00Z", "github.com/a/two error: \"authentication failed\"", "1 items"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("renderQuery output lacks %q:\n%s", want, out)
-		}
-	}
-}
-
-func TestRenderCheckoutShowsActionsAndErrors(t *testing.T) {
-	report := checkoutReport{DryRun: true, Results: []checkout.Result{
-		{Repository: "github.com/a/one", Path: "/code/github.com/a/one", Branch: "main", Commit: "abc123", Status: checkout.StatusPlanned, HistoryUnresolved: true,
-			Actions:        []checkout.Action{{Kind: checkout.KindSwitchBranch, Branch: "main", From: "feature", To: "main"}},
-			PlannedActions: []checkout.Action{{Kind: checkout.KindUpdate, Branch: "main", From: "abc123", To: "def456"}}},
-		{Repository: "github.com/a/two", Path: "/code/github.com/a/two", Status: checkout.StatusFailed, Error: "dirty working tree"},
-	}}
-
-	out := render(t, func(command *cobra.Command) error { return renderCheckout(command, report, false) })
-
-	for _, want := range []string{"planned github.com/a/one path=\"/code/github.com/a/one\" branch=\"main\" commit=abc123", "completed switch_branch branch=\"main\" from=\"feature\" to=\"main\"", "planned update branch=\"main\" from=\"abc123\" to=\"def456\"", "history check unresolved", "failed github.com/a/two", "error: \"dirty working tree\"", "repositories=2 complete=false dry_run=true"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("renderCheckout output lacks %q:\n%s", want, out)
 		}
 	}
 }

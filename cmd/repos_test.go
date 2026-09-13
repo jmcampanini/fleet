@@ -88,17 +88,37 @@ func TestReposRequiresCodeDirOnlyWhenRepositoriesAreSelected(t *testing.T) {
 	}
 }
 
-func TestRenderReposShowsEachEntryAndError(t *testing.T) {
-	report := repos.Report{TopicsFetched: true, Results: []repos.Entry{
-		{Repository: "github.com/a/one", Path: "/code/github.com/a/one", Branch: "develop", Groups: []string{"clis", "tools"}, Topics: []string{"cli", "go"}},
-		{Repository: "github.com/a/two", Path: "/code/github.com/a/two", Groups: []string{}, Topics: []string{}, Error: "gh: HTTP 401; pass --no-topics"},
-	}}
+func TestRenderReposAlignsColumnsAndSummarizesTopics(t *testing.T) {
+	cases := []struct {
+		name   string
+		report repos.Report
+		want   string
+	}{
+		{
+			name: "fetched topics with a failure",
+			report: repos.Report{TopicsFetched: true, Results: []repos.Entry{
+				{Repository: "github.com/a/one", Path: "/code/github.com/a/one", Branch: "develop", Groups: []string{"clis", "tools"}, Topics: []string{"cli", "go"}},
+				{Repository: "github.com/a/two-longer", Path: "/code/github.com/a/two-longer", Groups: []string{}, Topics: []string{}, Error: "gh: HTTP 401\nsecond line; pass --no-topics"},
+			}},
+			want: "github.com/a/one         branch=develop  groups=clis,tools  topics=cli,go\n" +
+				"github.com/a/two-longer  branch=default  groups=-           topics=-       gh: HTTP 401\n" +
+				"2 repositories, topics fetched, 1 failed\n",
+		},
+		{
+			name: "skipped topics",
+			report: repos.Report{Complete: true, Results: []repos.Entry{
+				{Repository: "github.com/a/one", Path: "/code/github.com/a/one", Groups: []string{"clis"}, Topics: []string{}},
+			}},
+			want: "github.com/a/one  branch=default  groups=clis  topics=-\n1 repository, topics skipped\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := render(t, func(command *cobra.Command) error { return renderRepos(command, tc.report, false) })
 
-	out := render(t, func(command *cobra.Command) error { return renderRepos(command, report, false) })
-
-	for _, want := range []string{`github.com/a/one path="/code/github.com/a/one" branch="develop" groups=clis,tools topics=cli,go`, `github.com/a/two path="/code/github.com/a/two" branch="" groups= topics=`, `error: "gh: HTTP 401; pass --no-topics"`, "repositories=2 complete=false topics_fetched=true"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("renderRepos output lacks %q:\n%s", want, out)
-		}
+			if out != tc.want {
+				t.Errorf("renderRepos output = %q, want %q", out, tc.want)
+			}
+		})
 	}
 }
