@@ -19,8 +19,9 @@ func newRepos() *cobra.Command {
 	command := &cobra.Command{
 		Use: "repos [repository ...]", Short: "List the configured repositories with their GitHub topics",
 		Long: `List the selected repositories in complete-identity order with their
-branch override, expected checkout path, group membership, and GitHub
-topics. Nothing is cloned, fetched, or changed.
+branch override, group membership, and GitHub topics. The expected
+checkout path appears in the --json report. Nothing is cloned, fetched,
+or changed.
 
 Topics:
   Ask authenticated gh for each repository's topics on its host, with at
@@ -77,13 +78,32 @@ func renderRepos(cmd *cobra.Command, report repos.Report, jsonOutput bool) error
 	}
 
 	var out strings.Builder
+	rows := make([][]string, 0, len(report.Results))
+	failed := 0
 	for _, entry := range report.Results {
-		fmt.Fprintf(&out, "%s path=%q branch=%q groups=%s topics=%s\n", entry.Repository, entry.Path, entry.Branch, strings.Join(entry.Groups, ","), strings.Join(entry.Topics, ","))
+		rows = append(rows, []string{entry.Repository, "branch=" + orDefault(entry.Branch, "default"), "groups=" + orDefault(strings.Join(entry.Groups, ","), "-"), "topics=" + orDefault(strings.Join(entry.Topics, ","), "-"), firstLine(entry.Error)})
 		if entry.Error != "" {
-			fmt.Fprintf(&out, "  error: %q\n", entry.Error)
+			failed++
 		}
 	}
-	fmt.Fprintf(&out, "repositories=%d complete=%t topics_fetched=%t\n", len(report.Results), report.Complete, report.TopicsFetched)
+	writeColumns(&out, rows)
+
+	topics := "topics skipped"
+	if report.TopicsFetched {
+		topics = "topics fetched"
+	}
+	fmt.Fprintf(&out, "%s, %s", countNoun(len(report.Results), "repository", "repositories"), topics)
+	if failed > 0 {
+		fmt.Fprintf(&out, ", %d failed", failed)
+	}
+	fmt.Fprintln(&out)
 	_, err := fmt.Fprint(cmd.OutOrStdout(), out.String())
 	return err
+}
+
+func orDefault(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }
