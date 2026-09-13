@@ -57,11 +57,11 @@ const (
 
 // Options specifies a resource query and global result limit.
 type Options struct {
-	Resource Resource `json:"resource" help:"issues or prs."`
-	State    State    `json:"state" help:"open, closed, all, or merged (prs only)."`
-	Sort     Sort     `json:"sort" help:"created, updated, closed, or merged (prs only)."`
-	Order    Order    `json:"order" help:"asc or desc."`
-	Limit    int      `json:"limit" help:"Maximum items across the selection."`
+	Resource Resource `json:"resource"`
+	State    State    `json:"state"`
+	Sort     Sort     `json:"sort"`
+	Order    Order    `json:"order"`
+	Limit    int      `json:"limit"`
 }
 
 // Validate fills the state-dependent default sort and rejects invalid
@@ -90,16 +90,16 @@ func (o *Options) Validate() error {
 
 // Item retains the resource-specific state reason and event timestamps.
 type Item struct {
-	Repository  string     `json:"repository" help:"Configured complete identity."`
-	Number      int        `json:"number" help:"Item number within the repository."`
-	Title       string     `json:"title" help:"Item title."`
-	URL         string     `json:"url" help:"Canonical URL; the deduplication key."`
-	State       string     `json:"state" help:"open, closed, or merged."`
-	StateReason string     `json:"state_reason,omitempty" help:"GitHub's issue state reason verbatim, such as COMPLETED or NOT_PLANNED. Omitted for pull requests."`
-	CreatedAt   time.Time  `json:"created_at" help:"Creation timestamp."`
-	UpdatedAt   time.Time  `json:"updated_at" help:"Last update timestamp."`
-	ClosedAt    *time.Time `json:"closed_at" help:"Closure timestamp, or null while open."`
-	MergedAt    *time.Time `json:"merged_at" help:"Merge timestamp, or null for issues and unmerged pull requests."`
+	Repository  string     `json:"repository"`
+	Number      int        `json:"number"`
+	Title       string     `json:"title"`
+	URL         string     `json:"url"`
+	State       string     `json:"state"`
+	StateReason string     `json:"state_reason,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	ClosedAt    *time.Time `json:"closed_at"`
+	MergedAt    *time.Time `json:"merged_at"`
 }
 
 // Timestamp returns the event chosen for ordering a validated query.
@@ -123,17 +123,17 @@ func (i Item) Timestamp(sort Sort) time.Time {
 
 // RepositoryResult records query completeness separately from returned items.
 type RepositoryResult struct {
-	Repository string `json:"repository" help:"Configured complete identity."`
-	Complete   bool   `json:"complete" help:"The repository established enough candidates for the requested ordering."`
-	Error      string `json:"error,omitempty" help:"Failure reason, present only for incomplete repositories."`
+	Repository string `json:"repository"`
+	Complete   bool   `json:"complete"`
+	Error      string `json:"error,omitempty"`
 }
 
 // Report contains a globally limited result and per-repository failures.
 type Report struct {
-	Query        Options            `json:"query" help:"The validated controls in effect."`
-	Complete     bool               `json:"complete" help:"Every repository established enough candidates for the requested global ordering. An incomplete report is not the newest or oldest across the selection."`
-	Items        []Item             `json:"items" help:"Matching items after deduplication, ordering, and the limit."`
-	Repositories []RepositoryResult `json:"repositories" help:"One entry per queried repository."`
+	Query        Options            `json:"query"`
+	Complete     bool               `json:"complete"`
+	Items        []Item             `json:"items"`
+	Repositories []RepositoryResult `json:"repositories"`
 }
 
 // Client retrieves gh JSON with at most four repositories in flight.

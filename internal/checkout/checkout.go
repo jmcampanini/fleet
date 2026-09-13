@@ -44,23 +44,23 @@ const (
 
 // Action records one completed or planned checkout change.
 type Action struct {
-	Kind   Kind   `json:"kind" help:"clone, create_branch, switch_branch, or update."`
-	Branch string `json:"branch" help:"Target branch of the action."`
-	From   string `json:"from,omitempty" help:"Previous branch for switch_branch or previous commit for update; omitted otherwise."`
-	To     string `json:"to,omitempty" help:"New branch for switch_branch, or new commit for clone, create_branch, and update. A clone whose verification failed early omits it."`
+	Kind   Kind   `json:"kind"`
+	Branch string `json:"branch"`
+	From   string `json:"from,omitempty"`
+	To     string `json:"to,omitempty"`
 }
 
 // Result preserves completed actions even if a later step fails.
 type Result struct {
-	Repository        string   `json:"repository" help:"Configured complete identity."`
-	Path              string   `json:"path" help:"Primary checkout path below CODE_DIR."`
-	Branch            string   `json:"branch" help:"Target branch; empty if unknown."`
-	Commit            string   `json:"commit" help:"Observed commit; empty if unknown."`
-	Status            Status   `json:"status" help:"sync: current, updated, missing, planned, or failed. clone: cloned, present, planned, or failed. A branch-only change is updated."`
-	Actions           []Action `json:"actions" help:"Completed actions in execution order, retained after a later failure."`
-	PlannedActions    []Action `json:"planned_actions" help:"Intended actions of a dry run; empty otherwise."`
-	HistoryUnresolved bool     `json:"history_unresolved" help:"A dry run lacked the Git objects needed to compare target history; planned updates remain conditional."`
-	Error             string   `json:"error,omitempty" help:"Failure reason, present only for failed repositories."`
+	Repository        string   `json:"repository"`
+	Path              string   `json:"path"`
+	Branch            string   `json:"branch"`
+	Commit            string   `json:"commit"`
+	Status            Status   `json:"status"`
+	Actions           []Action `json:"actions"`
+	PlannedActions    []Action `json:"planned_actions"`
+	HistoryUnresolved bool     `json:"history_unresolved"`
+	Error             string   `json:"error,omitempty"`
 }
 
 // Client executes Git at a replaceable subprocess boundary.

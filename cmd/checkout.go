@@ -15,9 +15,9 @@ import (
 
 // checkoutReport is the payload that clone and sync share.
 type checkoutReport struct {
-	Complete bool              `json:"complete" help:"Every selected repository finished without error. Checkouts that sync reports missing do not clear it."`
-	DryRun   bool              `json:"dry_run" help:"The report describes a preview."`
-	Results  []checkout.Result `json:"results" help:"One result per selected repository, sorted by complete identity."`
+	Complete bool              `json:"complete"`
+	DryRun   bool              `json:"dry_run"`
+	Results  []checkout.Result `json:"results"`
 }
 
 // checkoutStep processes one selected repository; Client.Clone and
