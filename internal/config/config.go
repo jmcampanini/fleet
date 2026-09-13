@@ -20,12 +20,21 @@ type PRs struct {
 	Limit int `toml:"limit" config:"prs-limit" help:"Maximum total pull requests across selected repositories"`
 }
 
+// Repo holds the optional settings of one configured repository.
+type Repo struct {
+	Branch string `toml:"branch"`
+}
+
 // Config is the effective application configuration.
 type Config struct {
-	Groups map[string][]string           `toml:"groups"`
-	Issues Issues                        `toml:"issues"`
-	PRs    PRs                           `toml:"prs"`
-	Repos  map[string]inventory.Settings `toml:"repos"`
+	Groups map[string][]string `toml:"groups"`
+	Issues Issues              `toml:"issues"`
+	PRs    PRs                 `toml:"prs"`
+	Repos  map[string]Repo     `toml:"repos"`
+}
+
+func defaults() Config {
+	return Config{Issues: Issues{Limit: 15}, PRs: PRs{Limit: 15}}
 }
 
 // Load applies defaults, one required file, environment, then root flags.
@@ -53,14 +62,19 @@ func Load(path string, flags *pflag.FlagSet) (Config, configloader.LoadReport, i
 	if err != nil {
 		return Config{}, configloader.LoadReport{}, inventory.Inventory{}, err
 	}
-	cfg, report, err := configloader.Load(Config{Issues: Issues{Limit: 15}, PRs: PRs{Limit: 15}}, fileLoader, envLoader, flagLoader)
+	cfg, report, err := configloader.Load(defaults(), fileLoader, envLoader, flagLoader)
 	if err != nil {
 		return Config{}, configloader.LoadReport{}, inventory.Inventory{}, fmt.Errorf("load config %q: %w", path, err)
 	}
 	if cfg.Issues.Limit <= 0 || cfg.PRs.Limit <= 0 {
 		return Config{}, configloader.LoadReport{}, inventory.Inventory{}, fmt.Errorf("issues.limit and prs.limit must be positive integers")
 	}
-	inv, err := inventory.New(cfg.Repos, cfg.Groups)
+
+	branches := make(map[string]string, len(cfg.Repos))
+	for id, repo := range cfg.Repos {
+		branches[id] = repo.Branch
+	}
+	inv, err := inventory.New(branches, cfg.Groups)
 	if err != nil {
 		return Config{}, configloader.LoadReport{}, inventory.Inventory{}, err
 	}

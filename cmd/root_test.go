@@ -26,7 +26,7 @@ func TestHelpAndVersionNeedNoSetup(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "missing"))
 	t.Setenv("CODE_DIR", "")
 	t.Setenv("PATH", "")
-	for _, args := range [][]string{{"--help"}, {"--version"}, {"sync", "--help"}, {"issues", "--help"}, {"prs", "--help"}, {"config", "--help"}, {"completion", "bash"}} {
+	for _, args := range [][]string{{"--help"}, {"--version"}, {"clone", "--help"}, {"sync", "--help"}, {"json-reports"}, {"issues", "--help"}, {"prs", "--help"}, {"config", "--help"}, {"completion", "bash"}} {
 		out, _, err := execute(t, args...)
 		if err != nil || out == "" {
 			t.Errorf("execute(%v) = %q, %v", args, out, err)
@@ -74,7 +74,7 @@ func TestEveryApplicationCommandHasWrappedLongHelp(t *testing.T) {
 func TestUsageErrorsPrecedeConfigAndWork(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "missing"))
 	t.Setenv("PATH", "")
-	for _, args := range [][]string{{"unknown"}, {"config", "extra"}, {"exit-codes", "extra"}, {"sync", "--unknown"}, {"issues", "--state", "merged"}, {"prs", "--sort", "closed"}, {"issues", "--sort", "merged"}} {
+	for _, args := range [][]string{{"unknown"}, {"config", "extra"}, {"exit-codes", "extra"}, {"json-reports", "extra"}, {"clone"}, {"clone", "--all", "one"}, {"clone", "--all", "--group", "empty"}, {"sync", "--unknown"}, {"issues", "--state", "merged"}, {"prs", "--sort", "closed"}, {"issues", "--sort", "merged"}} {
 		out, _, err := execute(t, args...)
 		if err == nil || out != "" || strings.Contains(err.Error(), "load config") {
 			t.Errorf("execute(%v) = %q, %v", args, out, err)
@@ -89,7 +89,7 @@ func TestEmptyQueriesAndConfigProvenance(t *testing.T) {
 	}
 	t.Setenv("CODE_DIR", "")
 	t.Setenv("PATH", "")
-	for _, resource := range []string{"issues", "prs", "sync"} {
+	for _, resource := range []string{"issues", "prs", "sync", "clone"} {
 		out, stderr, err := execute(t, resource, "--config", path, "--group", "empty", "--json")
 		if err != nil || !json.Valid([]byte(out)) || !strings.Contains(out, `"complete":true`) || !strings.Contains(stderr, "No repositories") {
 			t.Errorf("empty %s = %q, %q, %v", resource, out, stderr, err)
@@ -121,7 +121,7 @@ func TestSyncBatchJSONContinuesAfterFailure(t *testing.T) {
 	if err == nil || !json.Valid([]byte(out)) {
 		t.Fatalf("partial sync = %q, %v", out, err)
 	}
-	var report syncReport
+	var report checkoutReport
 	if err := json.Unmarshal([]byte(out), &report); err != nil {
 		t.Fatal(err)
 	}

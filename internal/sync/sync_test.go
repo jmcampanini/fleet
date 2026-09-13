@@ -109,13 +109,13 @@ func TestCloneDefaultAndOverride(t *testing.T) {
 				git(t, f.seed, "push", f.remote, "HEAD:refs/heads/develop")
 				f.repo.Branch = branch
 			}
-			result := f.client.Sync(t.Context(), f.root, f.repo, false)
+			result := f.client.Clone(t.Context(), f.root, f.repo, false)
 			wantBranch := branch
 			if wantBranch == "" {
 				wantBranch = "trunk"
 			}
 			if result.Error != "" || result.Status != "cloned" || result.Branch != wantBranch {
-				t.Fatalf("Sync() = %+v", result)
+				t.Fatalf("Clone() = %+v", result)
 			}
 			if got := git(t, f.path, "branch", "--show-current"); got != wantBranch {
 				t.Errorf("branch = %q, want %q", got, wantBranch)
@@ -259,9 +259,11 @@ func TestPathsAndRemoteValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	write(t, filepath.Join(f.path, "unrelated"), "keep")
-	result := f.client.Sync(t.Context(), f.root, f.repo, false)
-	if result.Error == "" {
-		t.Fatal("non-checkout directory was accepted")
+	if result := f.client.Sync(t.Context(), f.root, f.repo, false); result.Error == "" {
+		t.Fatal("sync accepted a non-checkout directory")
+	}
+	if result := f.client.Clone(t.Context(), f.root, f.repo, false); result.Error == "" {
+		t.Fatal("clone accepted a non-checkout directory")
 	}
 	body, err := os.ReadFile(filepath.Join(f.path, "unrelated"))
 	if err != nil || string(body) != "keep" {
@@ -304,7 +306,7 @@ func TestEmptyDestinationAndFailedClone(t *testing.T) {
 					return run(ctx, dir, program, args...)
 				}
 			}
-			result := f.client.Sync(t.Context(), f.root, f.repo, false)
+			result := f.client.Clone(t.Context(), f.root, f.repo, false)
 			if !fail && result.Status != "cloned" {
 				t.Fatalf("empty destination = %+v", result)
 			}
@@ -344,11 +346,63 @@ func TestWrongOriginAndSymlinkArePreserved(t *testing.T) {
 
 func TestDryRunMissingCheckoutCreatesNothing(t *testing.T) {
 	f := setup(t, false)
-	result := f.client.Sync(t.Context(), f.root, f.repo, true)
+	result := f.client.Clone(t.Context(), f.root, f.repo, true)
 	if result.Error != "" || result.Status != "planned" || len(result.PlannedActions) != 1 {
 		t.Fatalf("dry-run clone = %+v", result)
 	}
 	if _, err := os.Stat(filepath.Join(f.root, "github.com")); !os.IsNotExist(err) {
 		t.Fatalf("dry-run created parent directories: %v", err)
+	}
+}
+
+func TestSyncReportsMissingCheckoutWithoutCloning(t *testing.T) {
+	for _, dryRun := range []bool{false, true} {
+		f := setup(t, false)
+		var calls int
+		run := f.client.Run
+		f.client.Run = func(ctx context.Context, dir, program string, args ...string) (string, error) {
+			calls++
+			return run(ctx, dir, program, args...)
+		}
+
+		result := f.client.Sync(t.Context(), f.root, f.repo, dryRun)
+
+		if result.Error != "" || result.Status != "missing" || len(result.Actions) != 0 || len(result.PlannedActions) != 0 {
+			t.Fatalf("Sync(dryRun=%t) = %+v, want status missing", dryRun, result)
+		}
+		if calls != 0 {
+			t.Errorf("Sync(dryRun=%t) ran %d Git commands for a missing checkout", dryRun, calls)
+		}
+		if _, err := os.Stat(filepath.Join(f.root, "github.com")); !os.IsNotExist(err) {
+			t.Errorf("Sync(dryRun=%t) created parent directories: %v", dryRun, err)
+		}
+	}
+}
+
+func TestCloneLeavesExistingCheckoutUntouched(t *testing.T) {
+	f := setup(t, true)
+	git(t, f.path, "switch", "-c", "feature")
+	write(t, filepath.Join(f.path, "new"), "local work")
+	before := git(t, f.path, "status", "--porcelain=v1")
+
+	result := f.client.Clone(t.Context(), f.root, f.repo, false)
+
+	if result.Error != "" || result.Status != "present" || len(result.Actions) != 0 || result.Branch != "feature" {
+		t.Fatalf("Clone() on existing checkout = %+v, want status present", result)
+	}
+	if git(t, f.path, "status", "--porcelain=v1") != before || git(t, f.path, "branch", "--show-current") != "feature" {
+		t.Error("present checkout was modified")
+	}
+}
+
+func TestCloneRejectsForeignCheckout(t *testing.T) {
+	f := setup(t, true)
+	git(t, f.path, "remote", "set-url", "origin", "git@github.com:other/repository.git")
+	before := git(t, f.path, "show-ref")
+
+	result := f.client.Clone(t.Context(), f.root, f.repo, false)
+
+	if !strings.Contains(result.Error, "origin does not identify") || git(t, f.path, "show-ref") != before {
+		t.Fatalf("Clone() on foreign checkout = %+v", result)
 	}
 }

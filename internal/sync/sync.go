@@ -60,27 +60,58 @@ func ValidateRoot(root string) error {
 	return nil
 }
 
-// Sync processes one repository and returns all completed and intended actions.
+// Sync brings an existing checkout to its target branch and returns all
+// completed and intended actions. A missing or empty destination is
+// reported with status "missing" and is never cloned.
 func (c Client) Sync(ctx context.Context, root string, repo inventory.Repository, dryRun bool) Result {
-	r := Result{Repository: repo.ID, Path: filepath.Join(root, filepath.FromSlash(repo.ID)), Branch: repo.Branch, Actions: []Action{}, PlannedActions: []Action{}}
+	r := newResult(root, repo)
 	if err := c.sync(ctx, root, repo, dryRun, &r); err != nil {
 		r.Status, r.Error = "failed", err.Error()
 	}
 	return r
 }
 
+// Clone creates a missing checkout. An existing checkout of the configured
+// repository is reported with status "present" and left untouched, so
+// repeated clones are safe.
+func (c Client) Clone(ctx context.Context, root string, repo inventory.Repository, dryRun bool) Result {
+	r := newResult(root, repo)
+	if err := c.clone(ctx, root, repo, dryRun, &r); err != nil {
+		r.Status, r.Error = "failed", err.Error()
+	}
+	return r
+}
+
+func newResult(root string, repo inventory.Repository) Result {
+	return Result{Repository: repo.ID, Path: filepath.Join(root, filepath.FromSlash(repo.ID)), Branch: repo.Branch, Actions: []Action{}, PlannedActions: []Action{}}
+}
+
+// destinationEmpty reports whether the checkout path is absent or an empty
+// directory, after rejecting unsafe path components below root.
+func destinationEmpty(root, id, path string) (bool, error) {
+	if err := checkPath(root, id); err != nil {
+		return false, err
+	}
+	entries, err := os.ReadDir(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return true, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("inspect destination: %w", err)
+	}
+	return len(entries) == 0, nil
+}
+
 func (c Client) sync(ctx context.Context, root string, repo inventory.Repository, dryRun bool, r *Result) error {
-	if err := checkPath(root, repo.ID); err != nil {
+	missing, err := destinationEmpty(root, repo.ID, r.Path)
+	if err != nil {
 		return err
 	}
-	entries, err := os.ReadDir(r.Path)
-	missing := errors.Is(err, os.ErrNotExist) || (err == nil && len(entries) == 0)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("inspect destination: %w", err)
-	}
 	if missing {
-		return c.clone(ctx, root, repo, dryRun, r)
+		r.Status = "missing"
+		return nil
 	}
+
 	if err := c.checkout(ctx, r.Path, repo.ID); err != nil {
 		return err
 	}
@@ -346,9 +377,16 @@ func (c Client) availableBranch(ctx context.Context, path, branch string) error 
 }
 
 func (c Client) clone(ctx context.Context, root string, repo inventory.Repository, dryRun bool, r *Result) error {
+	missing, err := destinationEmpty(root, repo.ID, r.Path)
+	if err != nil {
+		return err
+	}
+	if !missing {
+		return c.present(ctx, repo.ID, r)
+	}
+
 	server, rest, _ := strings.Cut(repo.ID, "/")
 	address := "git@" + server + ":" + rest + ".git"
-	var err error
 	r.Branch, r.Commit, err = c.remoteTarget(ctx, root, address, repo.Branch)
 	if err != nil {
 		return err
@@ -375,6 +413,25 @@ func (c Client) clone(ctx context.Context, root string, repo inventory.Repositor
 		return err
 	}
 	r.Status = "cloned"
+	return nil
+}
+
+// present records the state of an existing checkout without changing it.
+// Any other content at the destination is an error, so clone never
+// touches a directory it does not recognize.
+func (c Client) present(ctx context.Context, id string, r *Result) error {
+	if err := c.checkout(ctx, r.Path, id); err != nil {
+		return err
+	}
+	branch, err := c.Run(ctx, r.Path, "git", "branch", "--show-current")
+	if err != nil {
+		return err
+	}
+	commit, err := c.Run(ctx, r.Path, "git", "rev-parse", "HEAD")
+	if err != nil {
+		return err
+	}
+	r.Branch, r.Commit, r.Status = branch, commit, "present"
 	return nil
 }
 

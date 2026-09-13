@@ -24,7 +24,8 @@ type Options struct {
 	Limit    int    `json:"limit"`
 }
 
-// Validate fills the state-dependent default sort and rejects invalid controls.
+// Validate fills the state-dependent default sort and rejects invalid
+// controls. The limit is not a control; configuration validates it.
 func (o *Options) Validate() error {
 	if o.Resource != "issues" && o.Resource != "prs" {
 		return fmt.Errorf("unknown resource %q", o.Resource)
@@ -43,9 +44,6 @@ func (o *Options) Validate() error {
 	}
 	if o.Order != "asc" && o.Order != "desc" {
 		return fmt.Errorf("invalid order %q; use asc or desc", o.Order)
-	}
-	if o.Limit <= 0 {
-		return fmt.Errorf("query limit must be positive")
 	}
 	return nil
 }

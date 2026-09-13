@@ -7,7 +7,7 @@ import (
 )
 
 func TestSelectionUnion(t *testing.T) {
-	inv, err := New(map[string]Settings{"github.com/a/one": {}, "github.com/a/two": {}, "other.example/a/three": {}}, map[string][]string{"first": {"one", "a/two"}, "overlap": {"github.com/a/one", "three"}, "empty": {}})
+	inv, err := New(map[string]string{"github.com/a/one": "", "github.com/a/two": "", "other.example/a/three": ""}, map[string][]string{"first": {"one", "a/two"}, "overlap": {"github.com/a/one", "three"}, "empty": {}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestSelectionUnion(t *testing.T) {
 }
 
 func TestAmbiguityUsesWholeInventory(t *testing.T) {
-	inv, err := New(map[string]Settings{"github.com/a/repo": {}, "github.com/b/repo": {}, "other.example/a/repo": {}}, map[string][]string{"a": {"github.com/a/repo"}})
+	inv, err := New(map[string]string{"github.com/a/repo": "", "github.com/b/repo": "", "other.example/a/repo": ""}, map[string][]string{"a": {"github.com/a/repo"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,18 +53,18 @@ func TestAmbiguityUsesWholeInventory(t *testing.T) {
 }
 
 func TestInvalidInventoryAndSelection(t *testing.T) {
-	if _, err := New(map[string]Settings{"github.com/example/.github": {}}, nil); err != nil {
+	if _, err := New(map[string]string{"github.com/example/.github": ""}, nil); err != nil {
 		t.Fatalf("valid dot-prefixed repository was rejected: %v", err)
 	}
 	for _, id := range []string{"https://github.com/a/b", "github.com/a/../b", "github.com//b", "github.com/../b", "-host/a/b", "github.com/a/b,other", "github.com/a/b\n"} {
-		if _, err := New(map[string]Settings{id: {}}, nil); err == nil {
+		if _, err := New(map[string]string{id: ""}, nil); err == nil {
 			t.Errorf("New(%q) succeeded", id)
 		}
 	}
-	if _, err := New(map[string]Settings{"github.com/a/b": {}}, map[string][]string{"unused": {"unknown"}}); err == nil {
+	if _, err := New(map[string]string{"github.com/a/b": ""}, map[string][]string{"unused": {"unknown"}}); err == nil {
 		t.Error("unresolved unused group was accepted")
 	}
-	inv, err := New(map[string]Settings{"github.com/a/b": {}}, nil)
+	inv, err := New(map[string]string{"github.com/a/b": ""}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

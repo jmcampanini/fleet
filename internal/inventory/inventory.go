@@ -8,11 +8,6 @@ import (
 	"strings"
 )
 
-// Settings contains optional per-repository configuration.
-type Settings struct {
-	Branch string `toml:"branch"`
-}
-
 // Repository is a validated complete identity with its branch override.
 type Repository struct {
 	Branch string
@@ -26,13 +21,15 @@ type Inventory struct {
 }
 
 // New validates every identity and group before any selection is used.
-func New(repos map[string]Settings, groups map[string][]string) (Inventory, error) {
+// branches maps each complete identity to its branch override, or to an
+// empty string when the remote default branch applies.
+func New(branches map[string]string, groups map[string][]string) (Inventory, error) {
 	inv := Inventory{groups: make(map[string][]string), repos: make(map[string]Repository)}
-	for _, id := range sortedKeys(repos) {
+	for _, id := range sortedKeys(branches) {
 		if err := ValidateIdentity(id); err != nil {
 			return Inventory{}, err
 		}
-		branch := repos[id].Branch
+		branch := branches[id]
 		if branch != "" && !validBranch(branch) {
 			return Inventory{}, fmt.Errorf("repository %q: invalid branch %q", id, branch)
 		}

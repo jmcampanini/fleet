@@ -28,7 +28,8 @@ const outputHelp = `Output and dependencies:
   already be authenticated. Each subprocess has a 120-second timeout;
   Git SSH uses batch mode and a 15-second connection timeout.
   Help, version, and shell completion need no configuration or network.
-  See 'fleet exit-codes' and docs/automation.md for the automation contract.`
+  See 'fleet exit-codes' for exit status and 'fleet json-reports' for the
+  fields of every --json report.`
 
 const queryHelp = `Ordering:
   Open items default to created descending; closed items to closed

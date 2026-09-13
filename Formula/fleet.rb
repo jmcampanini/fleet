@@ -1,6 +1,7 @@
 class Fleet < Formula
   desc "Sync Git repositories and list issues and pull requests across them"
   homepage "https://github.com/jmcampanini/fleet"
+  license "MIT"
   head "https://github.com/jmcampanini/fleet.git", branch: "main"
 
   depends_on "go" => :build
