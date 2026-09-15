@@ -37,7 +37,7 @@ supported. Invalid configuration or an unknown group fails before output.
 Results go to stdout; diagnostics go to stderr. --json emits one object
 containing a groups array; see 'fleet json-reports' for its fields.
 No configured groups succeeds with 'No groups configured.' on stderr and
-empty stdout, or {"groups":[]} with --json. Success exits 0; errors exit 1.
+empty stdout, or {"groups":[]} with --json. Success exits 0; errors exit 2.
 This command needs no CODE_DIR, Git, gh, local checkout, or network.
 
 ` + configHelp,
@@ -50,20 +50,20 @@ This command needs no CODE_DIR, Git, gh, local checkout, or network.
 			if err != nil {
 				return err
 			}
-			_, _, inv, err := config.Load(path, cmd.Root().PersistentFlags())
+			loaded, err := config.Load(path, cmd.Root().PersistentFlags())
 			if err != nil {
 				return err
 			}
 
 			names := slices.Clone(groups)
 			if len(names) == 0 {
-				names = inv.GroupNames()
+				names = loaded.Inventory.GroupNames()
 			}
 			slices.Sort(names)
 			names = slices.Compact(names)
 			report := groupsReport{Groups: []groupResult{}}
 			for _, name := range names {
-				repos, err := inv.Select(nil, []string{name})
+				repos, err := loaded.Inventory.Select(nil, []string{name})
 				if err != nil {
 					return err
 				}

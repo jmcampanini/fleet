@@ -3,13 +3,13 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/jmcampanini/fleet/internal/checkout"
 	"github.com/jmcampanini/fleet/internal/process"
-	reposync "github.com/jmcampanini/fleet/internal/sync"
 	"github.com/spf13/cobra"
 )
 
 func newClone() *cobra.Command {
-	var groups []string
+	var selection selection
 	var all, dryRun, jsonOutput bool
 	command := &cobra.Command{
 		Use: "clone [repository ...]", Short: "Clone missing checkouts into CODE_DIR",
@@ -35,7 +35,7 @@ existing checkout; use 'fleet sync' for that.
 
 --dry-run queries remote refs and checks the destination without creating
 directories or cloning. Continue after repository failures; completed
-clones remain in place and appear in the final report.
+clones remain in place and appear in the report.
 
 ` + selectionHelp + "\n\n" + configHelp + "\n\n" + outputHelp,
 		Example: `  fleet clone --all
@@ -43,19 +43,19 @@ clones remain in place and appear in the final report.
   fleet clone --group personal-agent --dry-run --json`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, refs []string) error {
-			if all && (len(refs) > 0 || len(groups) > 0) {
+			if all && (len(refs) > 0 || len(selection.groups) > 0) {
 				return fmt.Errorf("--all cannot be combined with repository arguments or --group")
 			}
-			if !all && len(refs) == 0 && len(groups) == 0 {
+			if !all && len(refs) == 0 && len(selection.groups) == 0 {
 				return fmt.Errorf("clone requires --all, repository arguments, or --group")
 			}
 
-			client := reposync.Client{Run: process.Execute}
-			return runCheckout(cmd, checkoutRun{dryRun: dryRun, groups: groups, jsonOutput: jsonOutput, refs: refs, step: client.Clone})
+			client := checkout.Client{Run: process.Execute}
+			return runCheckout(cmd, checkoutRun{dryRun: dryRun, jsonOutput: jsonOutput, refs: refs, selection: selection, step: client.Clone})
 		},
 	}
 	command.Flags().BoolVar(&all, "all", false, "Select every configured repository")
-	command.Flags().StringArrayVar(&groups, "group", nil, "Select one group; repeat for several groups")
+	selection.bind(command.Flags())
 	command.Flags().BoolVar(&dryRun, "dry-run", false, "Inspect and plan without creating anything")
 	command.Flags().BoolVar(&jsonOutput, "json", false, "Emit a JSON report")
 	return command

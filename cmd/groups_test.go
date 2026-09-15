@@ -136,8 +136,8 @@ func TestGroupsErrorsLeaveStdoutEmpty(t *testing.T) {
 			}
 			for _, format := range [][]string{nil, {"--json"}} {
 				out, _, err := execute(t, append(args, format...)...)
-				if err == nil || !strings.Contains(err.Error(), tt.want) || out != "" {
-					t.Errorf("groups %v = %q, %v; want empty stdout and error containing %q", format, out, err, tt.want)
+				if err == nil || !strings.Contains(err.Error(), tt.want) || out != "" || ExitCode(err) != ExitPreflight {
+					t.Errorf("groups %v = %q, %v (exit %d); want empty stdout and preflight error containing %q", format, out, err, ExitCode(err), tt.want)
 				}
 			}
 		})

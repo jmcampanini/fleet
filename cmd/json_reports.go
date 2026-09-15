@@ -31,23 +31,37 @@ Clone and sync report:
   results            One result per selected repository, sorted by
                      complete identity.
 
-Each result:
-  repository, path   Configured complete identity and primary checkout path.
-  branch, commit     Target branch and observed commit; empty if unknown.
-  status             sync: current, updated, missing, planned, or failed.
-                     clone: cloned, present, planned, or failed. A
-                     branch-only change is updated.
-  actions            Completed actions in execution order, retained after
-                     a later failure.
-  planned_actions    Intended actions of a dry run; empty otherwise.
-  history_unresolved A dry run lacked the Git objects needed to compare
-                     target history; planned updates remain conditional.
-  error              Failure reason, present only for failed repositories.
+Each result carries repository, path, branch, commit, status, actions,
+planned_actions, history_unresolved, and error. branch and commit are the
+target branch and observed commit, empty if unknown. status is one of
+current, updated, missing, planned, or failed for sync, and cloned,
+present, planned, or failed for clone; a branch-only change is updated.
+actions lists completed actions in execution order and is retained after
+a later failure; planned_actions lists the intended actions of a dry run.
+history_unresolved means a dry run lacked the Git objects needed to
+compare target history, so planned updates remain conditional. error is
+present only for failed repositories.
 
 Each action has kind and branch. kind is clone, create_branch,
 switch_branch, or update. A switch has from and to branch names. An update
 has from and to commits. A clone or create_branch has a to commit, which a
 clone whose verification failed early can omit.
+
+Repos report:
+  complete           Every selected repository was described without a
+                     topic retrieval error.
+  topics_fetched     Topics were requested from GitHub; false under
+                     --no-topics, where every topic list is empty.
+  results            One entry per selected repository, sorted by
+                     complete identity.
+
+Each entry carries repository, path, branch, groups, topics, and error.
+path is the expected checkout under CODE_DIR whether or not it exists.
+branch is the configured override, empty when the remote default applies.
+groups lists the configured group names containing the repository, sorted.
+topics lists the repository's GitHub topics, sorted, and is empty when they
+were not fetched or the fetch failed. error is present only for a failed
+topic retrieval and names --no-topics as the offline alternative.
 
 Issue and PR report:
   query              resource, state, sort, order, and limit in effect.
@@ -59,16 +73,12 @@ Issue and PR report:
   repositories       repository, complete, and optional error for each
                      queried repository.
 
-Each item:
-  repository         Configured complete identity.
-  number, title, url Item number, title, and canonical URL.
-  state              open, closed, or merged.
-  state_reason       GitHub's issue state reason verbatim, such as
-                     COMPLETED or NOT_PLANNED. Omitted for pull requests.
-  created_at,        Creation and update timestamps.
-  updated_at
-  closed_at,         Event timestamps or null; merged_at is null for
-  merged_at          issues and unmerged pull requests.`,
+Each item carries repository, number, title, url, state, state_reason,
+created_at, updated_at, closed_at, and merged_at. state is open, closed,
+or merged. state_reason is GitHub's issue state reason verbatim, such as
+COMPLETED or NOT_PLANNED, and is omitted for pull requests. closed_at and
+merged_at are event timestamps or null; merged_at is null for issues and
+unmerged pull requests.`,
 		RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
 }

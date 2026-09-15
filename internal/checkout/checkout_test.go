@@ -1,4 +1,4 @@
-package sync
+package checkout
 
 import (
 	"context"
@@ -74,6 +74,10 @@ func setup(t *testing.T, checkout bool) fixture {
 	}
 	// Only transport is replaced. Real Git owns every checkout, ref, status,
 	// branch, and merge operation, including the failure cases under test.
+	// This fixture bypasses process.Execute, so the production Git flags set
+	// there are not exercised here. If a flag is ever added that changes how
+	// clone, fetch, switch, or merge behave (rather than disabling a side
+	// effect), rework this fixture to delegate to process.Execute.
 	f.client = Client{Run: func(ctx context.Context, dir, program string, args ...string) (string, error) {
 		args = append([]string(nil), args...)
 		if args[0] == "ls-remote" || args[0] == "fetch" || args[0] == "clone" {
@@ -269,7 +273,10 @@ func TestPathsAndRemoteValidation(t *testing.T) {
 	if err != nil || string(body) != "keep" {
 		t.Fatalf("unrelated data = %q, %v", body, err)
 	}
-	for _, origin := range []string{"git@github.com:example/project.git", "ssh://git@github.com/example/project.git", "https://github.com/example/project/"} {
+	if result := f.client.Sync(t.Context(), f.root, inventory.Repository{ID: "github.com/example/.."}, false); !strings.Contains(result.Error, "invalid repository identity") {
+		t.Fatalf("Sync() with an unvalidated identity = %+v, want rejection", result)
+	}
+	for _, origin := range []string{"git@github.com:example/project.git", "ssh://git@github.com/example/project.git", "ssh://git@github.com:22/example/project.git", "https://github.com/example/project/"} {
 		if got := originIdentity(origin); got != f.repo.ID {
 			t.Errorf("originIdentity(%q) = %q", origin, got)
 		}

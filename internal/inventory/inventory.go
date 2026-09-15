@@ -8,9 +8,11 @@ import (
 	"strings"
 )
 
-// Repository is a validated complete identity with its branch override.
+// Repository is a validated complete identity with its branch override and
+// the sorted names of the groups that list it.
 type Repository struct {
 	Branch string
+	Groups []string
 	ID     string
 }
 
@@ -46,6 +48,17 @@ func New(branches map[string]string, groups map[string][]string) (Inventory, err
 				return Inventory{}, fmt.Errorf("group %q: %w", name, err)
 			}
 			inv.groups[name] = append(inv.groups[name], id)
+		}
+	}
+
+	// Group names are visited in sorted order, so membership is sorted too.
+	for _, name := range sortedKeys(inv.groups) {
+		for _, id := range inv.groups[name] {
+			repo := inv.repos[id]
+			if !slices.Contains(repo.Groups, name) {
+				repo.Groups = append(repo.Groups, name)
+				inv.repos[id] = repo
+			}
 		}
 	}
 	return inv, nil
@@ -119,6 +132,19 @@ func (inv Inventory) Select(refs, groups []string) ([]Repository, error) {
 		repos = append(repos, inv.repos[id])
 	}
 	return repos, nil
+}
+
+// Label returns the shortest reference that selects id unambiguously: the
+// repository name, org/repo, or the complete identity.
+func (inv Inventory) Label(id string) string {
+	parts := strings.Split(id, "/")
+	for i := len(parts) - 1; i > 0; i-- {
+		ref := strings.Join(parts[i:], "/")
+		if resolved, err := inv.resolve(ref); err == nil && resolved == id {
+			return ref
+		}
+	}
+	return id
 }
 
 func (inv Inventory) resolve(ref string) (string, error) {

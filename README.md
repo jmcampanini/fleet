@@ -1,6 +1,6 @@
 # fleet
 
-Fleet clones the primary Git checkouts of a configured repository inventory into `$CODE_DIR/server/org/repo`, keeps them on their intended branches with fast-forward updates, and lists issues and pull requests across the same inventory. `clone` and `sync` are separate commands: sync never clones, and clone never updates an existing checkout. Fleet never stashes, resets, rebases, pushes, or deletes local work.
+Fleet clones the primary Git checkouts of a configured repository inventory into `$CODE_DIR/server/org/repo`, keeps them on their intended branches with fast-forward updates, describes the inventory with each repository's GitHub topics, and lists issues and pull requests across the same inventory. `clone` and `sync` are separate commands: sync never clones, and clone never updates an existing checkout. Fleet never stashes, resets, rebases, pushes, or deletes local work.
 
 Command help is the canonical reference: `fleet --help` and each command's `--help` describe every user-facing contract, `fleet config --help` describes the TOML format, discovery, and precedence, `fleet help exit-codes` describes exit statuses, and `fleet help json-reports` describes the fields of every `--json` report.
 
@@ -36,6 +36,8 @@ make build
 | `fleet clone --group clis` | Clone the members of one group. |
 | `fleet sync` | Fast-forward every existing checkout to its target branch and warn about missing ones. |
 | `fleet sync gibson molly --dry-run` | Show what sync would do to two repositories without changing them. |
+| `fleet repos --json` | Describe every configured repository with its path, groups, and GitHub topics. |
+| `fleet repos --no-topics` | List the inventory from the TOML file without contacting GitHub. |
 | `fleet issues --issues-limit 30` | List the 30 newest open issues across the inventory. |
 | `fleet prs --state merged --json` | Emit the most recently merged pull requests as one JSON report. |
 | `fleet groups --group agents` | List the resolved repository members of a configured group. |
@@ -43,7 +45,7 @@ make build
 
 ## Required external programs
 
-Fleet runs `git` for `clone` and `sync`, and `gh` for `issues` and `prs`. Both must be on `PATH`, and `gh` must already be authenticated; Fleet never prompts or reads credentials from stdin. `clone` and `sync` also require `CODE_DIR` to name an absolute, existing directory. Fleet supports macOS and Linux.
+Fleet runs `git` for `clone` and `sync`, and `gh` for `repos`, `issues`, and `prs`. Both must be on `PATH`, and `gh` must already be authenticated; Fleet never prompts or reads credentials from stdin. `clone`, `sync`, and `repos` also require `CODE_DIR` to name an absolute, existing directory. Fleet supports macOS and Linux.
 
 ## Configuration
 
