@@ -6,11 +6,23 @@ func jsonReportsTopic() *cobra.Command {
 	return &cobra.Command{
 		Use: "json-reports", Short: "Fields and values of the --json reports", Args: cobra.NoArgs,
 		Long: `Every command that accepts --json writes one JSON object followed by a
-newline to stdout after repository work finishes, including on failure.
+newline to stdout. Configuration and selection errors leave stdout empty.
+Repository commands report after work finishes, including on failure.
 Field names are lowercase with underscores. Empty arrays are [], never
 null. Optional strings are omitted when absent. Timestamps are RFC 3339
 strings; a missing event timestamp is null. Consumers should tolerate
 added fields.
+
+Group report:
+  groups             Selected groups, sorted alphabetically by name.
+
+Each group:
+  name               Configured group name.
+  repositories       Unique server/org/repo strings, sorted by complete
+                     identity. Shared repositories appear in every selected
+                     group they belong to. Empty groups have [].
+
+No configured groups produces {"groups":[]}.
 
 Clone and sync report:
   complete           Every selected repository finished without error.

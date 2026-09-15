@@ -26,6 +26,7 @@ updates an existing checkout.
   fleet sync gibson molly --group clis --dry-run
   fleet issues --issues-limit 30
   fleet prs --state merged
+  fleet groups
   fleet config --provenance`,
 		Args: cobra.NoArgs, SilenceErrors: true, SilenceUsage: true, Version: Version,
 		RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
@@ -35,7 +36,7 @@ updates an existing checkout.
 		// Registration depends only on this package's static configuration type.
 		panic(err)
 	}
-	root.AddCommand(newConfig(), newClone(), newSync(), newIssues(), newPRs(), exitCodesTopic(), jsonReportsTopic())
+	root.AddCommand(newConfig(), newClone(), newSync(), newIssues(), newPRs(), newGroups(), exitCodesTopic(), jsonReportsTopic())
 	return root
 }
 
