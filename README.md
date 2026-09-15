@@ -40,6 +40,7 @@ make build
 | `fleet repos --no-topics` | List the inventory from the TOML file without contacting GitHub. |
 | `fleet issues --issues-limit 30` | List the 30 newest open issues across the inventory. |
 | `fleet prs --state merged --json` | Emit the most recently merged pull requests as one JSON report. |
+| `fleet groups --group agents` | List the resolved repository members of a configured group. |
 | `fleet config --provenance` | Print the effective configuration with each field's source. |
 
 ## Required external programs

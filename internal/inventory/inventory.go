@@ -97,6 +97,11 @@ func validBranch(branch string) bool {
 	return true
 }
 
+// GroupNames returns all configured group names in alphabetical order.
+func (inv Inventory) GroupNames() []string {
+	return sortedKeys(inv.groups)
+}
+
 // Select returns the deduplicated union in complete-identity order.
 // An explicit empty group remains an empty selection.
 func (inv Inventory) Select(refs, groups []string) ([]Repository, error) {

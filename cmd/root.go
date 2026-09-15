@@ -28,6 +28,7 @@ each repository's path, groups, and GitHub topics.
   fleet repos --json
   fleet issues --issues-limit 30
   fleet prs --state merged
+  fleet groups
   fleet config --provenance`,
 		Args: cobra.NoArgs, SilenceErrors: true, SilenceUsage: true, Version: Version,
 		RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
@@ -37,7 +38,7 @@ each repository's path, groups, and GitHub topics.
 		// Registration depends only on this package's static configuration type.
 		panic(err)
 	}
-	root.AddCommand(newConfig(), newClone(), newSync(), newRepos(), newIssues(), newPRs(), exitCodesTopic(), jsonReportsTopic())
+	root.AddCommand(newConfig(), newClone(), newSync(), newRepos(), newIssues(), newPRs(), newGroups(), exitCodesTopic(), jsonReportsTopic())
 	return root
 }
 
