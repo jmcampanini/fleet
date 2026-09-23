@@ -354,7 +354,7 @@ func (c Client) clean(ctx context.Context, path string) (string, error) {
 		return "", err
 	}
 	if status != "" {
-		return "", fmt.Errorf("dirty working tree (including untracked files and submodules); preserve or resolve local work before rerunning: %s", status)
+		return "", fmt.Errorf("dirty working tree\nPreserve or resolve local work before rerunning.\n%s", status)
 	}
 	gitDir, err := c.Run(ctx, path, "git", "rev-parse", "--absolute-git-dir")
 	if err != nil {

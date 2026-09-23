@@ -16,6 +16,7 @@ import (
 type Run func(ctx context.Context, dir, program string, args ...string) (string, error)
 
 // Execute runs a command with closed stdin and a 120-second deadline.
+// Successful stdout retains spaces and tabs, but not trailing line endings.
 func Execute(ctx context.Context, dir, program string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
@@ -50,5 +51,5 @@ func Execute(ctx context.Context, dir, program string, args ...string) (string, 
 		}
 		return "", fmt.Errorf("%s: %w: %s", program, err, strings.TrimSpace(stderr.String()))
 	}
-	return strings.TrimSpace(stdout.String()), nil
+	return strings.TrimRight(stdout.String(), "\r\n"), nil
 }

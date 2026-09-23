@@ -21,6 +21,31 @@ func TestNoninteractiveEnvironmentAndClosedStdin(t *testing.T) {
 	}
 }
 
+func TestSuccessfulOutputPreservesSpacesAndTabs(t *testing.T) {
+	cases := []struct {
+		name   string
+		output string
+		want   string
+	}{
+		{name: "status columns", output: " M first\n M second\n", want: " M first\n M second"},
+		{name: "spaces and tabs", output: " \tvalue\t \n", want: " \tvalue\t "},
+		{name: "CRLF", output: "value\r\n", want: "value"},
+		{name: "empty", output: "", want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			output, err := Execute(t.Context(), "", "sh", "-c", `printf '%s' "$1"`, "sh", tc.output)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if output != tc.want {
+				t.Errorf("Execute() = %q, want %q", output, tc.want)
+			}
+		})
+	}
+}
+
 func TestGitSafetyConfiguration(t *testing.T) {
 	for name, want := range map[string]string{"core.hooksPath": "/dev/null", "submodule.recurse": "false", "maintenance.auto": "false", "gc.auto": "0"} {
 		output, err := Execute(t.Context(), t.TempDir(), "git", "config", "--get", name)
