@@ -66,8 +66,10 @@ func TestWriteResultDescribesEachOutcomeOnOneLine(t *testing.T) {
 			name: "failed after completed work with a multi-line error",
 			result: checkout.Result{Branch: "main", Status: checkout.StatusFailed,
 				Actions: []checkout.Action{{Kind: checkout.KindCreateBranch, Branch: "main", To: "abc1234567"}},
-				Error:   "dirty working tree; preserve or resolve local work before rerunning:  M file\n?? other"},
-			want: "✗ one (main): created branch main; dirty working tree; preserve or resolve local work before rerunning:  M file\n" +
+				Error:   "dirty working tree\nPreserve or resolve local work before rerunning.\n M file\n?? other"},
+			want: "✗ one (main): created branch main; dirty working tree\n" +
+				"    Preserve or resolve local work before rerunning.\n" +
+				"     M file\n" +
 				"    ?? other\n",
 		},
 	}

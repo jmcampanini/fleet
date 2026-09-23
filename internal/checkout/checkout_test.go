@@ -36,7 +36,7 @@ func gitRun(ctx context.Context, dir, program string, args ...string) (string, e
 	if err != nil {
 		return "", fmt.Errorf("git %v: %w: %s", args, err, out)
 	}
-	return strings.TrimSpace(string(out)), nil
+	return strings.TrimRight(string(out), "\r\n"), nil
 }
 
 func git(t *testing.T, dir string, args ...string) string {
@@ -161,6 +161,21 @@ func TestFeatureCommitsSurviveBranchCreation(t *testing.T) {
 	}
 	if got := git(t, f.path, "rev-parse", "--abbrev-ref", "trunk@{upstream}"); got != "origin/trunk" {
 		t.Errorf("upstream = %q", got)
+	}
+}
+
+func TestDirtyWorkingTreeErrorListsChangesBelowGuidance(t *testing.T) {
+	f := setup(t, true)
+	write(t, filepath.Join(f.path, "tracked"), "local")
+	write(t, filepath.Join(f.path, "staged"), "staged")
+	git(t, f.path, "add", "staged")
+	write(t, filepath.Join(f.path, "untracked"), "untracked")
+
+	result := f.client.Sync(t.Context(), f.root, f.repo, false)
+
+	want := "dirty working tree\nPreserve or resolve local work before rerunning.\nA  staged\n M tracked\n?? untracked"
+	if result.Status != StatusFailed || result.Error != want {
+		t.Errorf("Sync() = %+v, want failed with error %q", result, want)
 	}
 }
 
