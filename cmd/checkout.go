@@ -49,8 +49,17 @@ func runCheckout(cmd *cobra.Command, run checkoutRun) error {
 		}
 	}
 
+	labels := make([]string, len(repos))
+	labelWidth := 0
+	if !run.jsonOutput {
+		for i, repo := range repos {
+			labels[i] = loaded.Inventory.Label(repo.ID)
+			labelWidth = max(labelWidth, len(labels[i]))
+		}
+	}
+
 	report := checkoutReport{Complete: true, DryRun: run.dryRun, Results: []checkout.Result{}}
-	for _, repo := range repos {
+	for i, repo := range repos {
 		result := run.step(cmd.Context(), root, repo, run.dryRun)
 		// A checkout that sync finds missing is a warning, never a failure.
 		if result.Status == checkout.StatusMissing {
@@ -61,7 +70,7 @@ func runCheckout(cmd *cobra.Command, run checkoutRun) error {
 		report.Results = append(report.Results, result)
 		report.Complete = report.Complete && result.Error == ""
 		if !run.jsonOutput {
-			if err := writeResult(cmd.OutOrStdout(), loaded.Inventory.Label(repo.ID), result); err != nil {
+			if err := writeResult(cmd.OutOrStdout(), labels[i], labelWidth, result); err != nil {
 				return workError{err}
 			}
 		}
@@ -81,26 +90,28 @@ func runCheckout(cmd *cobra.Command, run checkoutRun) error {
 	return nil
 }
 
-// writeResult prints one repository as a marked line: a check for finished
-// work, an arrow for a dry-run plan, and a cross for a missing or failed
-// checkout. Extra lines of an error follow, indented.
-func writeResult(out io.Writer, label string, result checkout.Result) error {
-	marker, detail := "✓", ""
-	name := label
-	if result.Branch != "" {
-		name += " (" + result.Branch + ")"
-	}
+// writeResult aligns the repository and status without buffering other results.
+// Nerd Font Codicons distinguish unchanged, changed, planned, missing, and failed
+// outcomes. The branch follows the details; extra error lines follow, indented.
+func writeResult(out io.Writer, label string, labelWidth int, result checkout.Result) error {
+	marker, detail := "\ueab2", "" // nf-cod-check
 	completed := describeActions(result.Actions, false)
 
 	switch result.Status {
-	case checkout.StatusCurrent:
-		detail = "up to date at " + shortCommit(result.Commit)
-	case checkout.StatusPresent:
-		detail = "already present at " + shortCommit(result.Commit)
-	case checkout.StatusCloned, checkout.StatusUpdated:
+	case checkout.StatusCurrent, checkout.StatusPresent:
+		detail = shortCommit(result.Commit)
+	case checkout.StatusCloned:
+		marker = "\uea77" // nf-cod-sync
+		detail = shortCommit(result.Commit)
+	case checkout.StatusUpdated:
+		marker = "\uea77" // nf-cod-sync
 		detail = strings.Join(completed, ", ")
+		if len(result.Actions) == 1 && result.Actions[0].Kind == checkout.KindUpdate {
+			action := result.Actions[0]
+			detail = shortCommit(action.From) + " → " + shortCommit(action.To)
+		}
 	case checkout.StatusPlanned:
-		marker = "→"
+		marker = "\uea70" // nf-cod-eye
 		detail = "up to date at " + shortCommit(result.Commit)
 		if len(result.PlannedActions) > 0 {
 			detail = "would " + strings.Join(describeActions(result.PlannedActions, true), ", ")
@@ -109,18 +120,21 @@ func writeResult(out io.Writer, label string, result checkout.Result) error {
 			detail += "; history unresolved"
 		}
 	case checkout.StatusMissing:
-		marker = "✗"
-		detail = fmt.Sprintf("not cloned; run 'fleet clone %s'", label)
+		marker = "\uea6c" // nf-cod-warning
+		detail = fmt.Sprintf("run 'fleet clone %s'", label)
 	case checkout.StatusFailed:
-		marker = "✗"
+		marker = "\uea87" // nf-cod-error
 		detail = firstLine(result.Error)
 		if len(completed) > 0 {
 			detail = strings.Join(completed, ", ") + "; " + detail
 		}
 	}
+	if result.Branch != "" {
+		detail += " (" + result.Branch + ")"
+	}
 
 	var line strings.Builder
-	fmt.Fprintf(&line, "%s %s: %s\n", marker, name, detail)
+	fmt.Fprintf(&line, "%s  %-*s  %-7s  %s\n", marker, labelWidth, label, result.Status, detail)
 	if result.Status == checkout.StatusFailed {
 		for _, extra := range strings.Split(result.Error, "\n")[1:] {
 			fmt.Fprintf(&line, "    %s\n", extra)
@@ -144,7 +158,7 @@ func describeActions(actions []checkout.Action, planned bool) []string {
 		case checkout.KindSwitchBranch:
 			plan, done, object = "switch from", "switched from", action.From
 		case checkout.KindUpdate:
-			plan, done, object = "update", "updated", shortCommit(action.From)+" -> "+shortCommit(action.To)
+			plan, done, object = "update", "updated", shortCommit(action.From)+" → "+shortCommit(action.To)
 		default:
 			plan, done = string(action.Kind), string(action.Kind)
 		}
@@ -168,8 +182,9 @@ func writeSummary(out io.Writer, report checkoutReport) error {
 		status checkout.Status
 		word   string
 	}{
-		{checkout.StatusCurrent, "up to date"}, {checkout.StatusUpdated, "updated"}, {checkout.StatusCloned, "cloned"}, {checkout.StatusPresent, "present"},
-		{checkout.StatusPlanned, "planned"}, {checkout.StatusMissing, "missing"}, {checkout.StatusFailed, "failed"},
+		{checkout.StatusFailed, "failed"}, {checkout.StatusMissing, "missing"},
+		{checkout.StatusUpdated, "updated"}, {checkout.StatusCloned, "cloned"}, {checkout.StatusPlanned, "planned"},
+		{checkout.StatusCurrent, "up to date"}, {checkout.StatusPresent, "present"},
 	} {
 		if counts[entry.status] > 0 {
 			summary = append(summary, fmt.Sprintf("%d %s", counts[entry.status], entry.word))
@@ -177,6 +192,9 @@ func writeSummary(out io.Writer, report checkoutReport) error {
 	}
 
 	var line strings.Builder
+	if len(report.Results) > 0 {
+		line.WriteByte('\n')
+	}
 	line.WriteString(countNoun(len(report.Results), "repository", "repositories"))
 	if len(summary) > 0 {
 		fmt.Fprintf(&line, ": %s", strings.Join(summary, ", "))
