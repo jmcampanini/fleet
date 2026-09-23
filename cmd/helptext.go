@@ -21,10 +21,19 @@ const configHelp = `Configuration:
   Fleet does not run Overlay or discover profiles.`
 
 const outputHelp = `Output and dependencies:
-  Results go to stdout; diagnostics go to stderr. clone and sync print one
-  line per repository as soon as it finishes, then a summary line. --json
-  instead emits one JSON report after all work, including failures and
-  completed actions. Success exits 0.
+  Results go to stdout; diagnostics go to stderr. clone and sync print every
+  repository as soon as it finishes, in aligned rows without headers or color:
+  Nerd Font icon, repository, result, details, then the branch in parentheses.
+  Repository and result columns align; long branches remain in full at the end.
+  Codicons mark current/present with a check, updated/cloned with circular
+  arrows, planned with an eye, missing with a warning triangle, and failed
+  with a circled cross. Result words also identify each outcome.
+  Commit hashes use seven characters. Failures retain completed actions and
+  full error details, with additional error lines indented. A blank line
+  separates rows from the summary, which lists failures and missing checkouts
+  first, changes and plans next, and unchanged repositories last.
+  --json instead emits one JSON report after all work, including failures
+  and completed actions. Success exits 0.
   Partial or incomplete results exit 1 after the report is written.
   Preflight errors exit 2 and leave stdout empty.
   Commands do not prompt or read credentials from stdin. Git and gh must
