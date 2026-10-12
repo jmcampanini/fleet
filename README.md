@@ -23,10 +23,18 @@ brew upgrade --fetch-HEAD fleet
 
 ### From source
 
+With Git and [mise](https://mise.jdx.dev) installed (`brew install mise` on macOS), mise supplies the pinned Go toolchain from `mise.toml`:
+
 ```sh
-make build
+git clone https://github.com/jmcampanini/fleet
+cd fleet
+mise trust
+mise install
+mise run build
 # then copy ./build/fleet to a directory on your PATH
 ```
+
+To upgrade, run `git pull`, rebuild with `mise install && mise run build`, and replace the binary on your `PATH`.
 
 ## Representative commands
 
