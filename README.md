@@ -24,7 +24,10 @@ brew upgrade --fetch-HEAD fleet
 ### From source
 
 ```sh
-make build
+brew install git mise
+mise trust
+mise install
+mise run build
 # then copy ./build/fleet to a directory on your PATH
 ```
 
