@@ -1,6 +1,6 @@
 module github.com/jmcampanini/fleet
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/jmcampanini/go-config-loader v0.3.0
