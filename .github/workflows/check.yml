@@ -1,9 +1,9 @@
-name: check
+name: Check
 
 on:
-  pull_request:
-    branches: [main]
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: check-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -19,6 +19,7 @@ jobs:
     name: check
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -27,10 +28,10 @@ jobs:
           persist-credentials: false
 
       - name: Set up mise
-        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+        uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
 
       - name: Record working tree state
-        run: git status --porcelain > "$RUNNER_TEMP/porcelain-before"
+        run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/porcelain-before"
 
       - name: Check
         run: mise run check
@@ -38,5 +39,5 @@ jobs:
       - name: Verify check left the working tree unchanged
         if: always()
         run: |
-          git status --porcelain > "$RUNNER_TEMP/porcelain-after"
+          git status --porcelain --untracked-files=all > "$RUNNER_TEMP/porcelain-after"
           diff -u "$RUNNER_TEMP/porcelain-before" "$RUNNER_TEMP/porcelain-after"

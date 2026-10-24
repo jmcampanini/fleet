@@ -1,5 +1,5 @@
 - Command help is the canonical user-facing documentation; the README is a landing page.
-- This repository uses mise for tool versions and task execution. Run tasks with `mise run <task>`; do not call `go`, `golangci-lint`, or similar tools directly. `mise tasks` lists every task.
-- Use `mise run check` for local and CI verification. Keep formatting and dependency updates in their separate write-mode tasks such as `mise run fmt` and `mise run tidy`.
-- `mise.toml` pins Go, golangci-lint, and govulncheck; `mise.lock` records their checksums. Bump a tool with `mise upgrade --bump <tool>`, run `mise lock` and `mise run check`, and commit both files.
+- Use `mise run check` for local and CI verification. Keep formatting and dependency updates in their separate write-mode tasks.
 - The `json-reports` help topic in `cmd/json_reports.go` is written by hand. Update it in the same change as any edit to the report structs it describes: `checkoutReport`, `checkout.Result`, `checkout.Action`, `query.Report`, `query.Options`, `query.Item`, and `query.RepositoryResult`.
+- Install prerequisites with `brew install git mise`, then run `mise trust` and `mise install`. Run repository tools through `mise run <task>`; use `mise tasks` to list tasks.
+- To bump a tool, run `mise upgrade --bump <tool>`, then `mise lock` and `mise run check`.
