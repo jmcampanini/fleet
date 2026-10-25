@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jmcampanini/fleet/internal/exitstatus"
 	"github.com/jmcampanini/fleet/internal/process"
 	"github.com/jmcampanini/fleet/internal/query"
 	"github.com/spf13/cobra"
@@ -48,10 +49,10 @@ func newQuery(spec querySpec) *cobra.Command {
 			report := (query.Client{Run: process.Execute}).List(cmd.Context(), repos, options)
 
 			if err := renderQuery(cmd, report, jsonOutput); err != nil {
-				return workError{err}
+				return exitstatus.WorkError{Err: err}
 			}
 			if !report.Complete {
-				return workError{errors.New("partial query results; see repository errors in the report")}
+				return exitstatus.WorkError{Err: errors.New("partial query results; see repository errors in the report")}
 			}
 			return nil
 		},

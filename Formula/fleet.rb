@@ -11,7 +11,7 @@ class Fleet < Formula
   def install
     ldflags = %W[
       -s -w
-      -X github.com/jmcampanini/fleet/cmd.Version=#{version}
+      -X github.com/jmcampanini/fleet/internal/cli.Version=#{version}
     ]
     system "go", "build", "-buildvcs=false", *std_go_args(ldflags:)
     generate_completions_from_executable(bin/"fleet", "completion")

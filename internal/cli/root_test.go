@@ -1,26 +1,16 @@
-package cmd
+package cli
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/jmcampanini/fleet/internal/checkoutreport"
+	"github.com/jmcampanini/fleet/internal/exitstatus"
 	"github.com/spf13/cobra"
 )
-
-func execute(t *testing.T, args ...string) (string, string, error) {
-	t.Helper()
-	root := NewRoot()
-	var stdout, stderr bytes.Buffer
-	root.SetOut(&stdout)
-	root.SetErr(&stderr)
-	root.SetArgs(args)
-	err := root.ExecuteContext(t.Context())
-	return stdout.String(), stderr.String(), err
-}
 
 func TestHelpAndVersionNeedNoSetup(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "missing"))
@@ -76,8 +66,8 @@ func TestUsageErrorsPrecedeConfigAndWork(t *testing.T) {
 	t.Setenv("PATH", "")
 	for _, args := range [][]string{{"unknown"}, {"config", "extra"}, {"groups", "extra"}, {"exit-codes", "extra"}, {"json-reports", "extra"}, {"clone"}, {"clone", "--all", "one"}, {"clone", "--all", "--group", "empty"}, {"sync", "--unknown"}, {"repos", "--unknown"}, {"issues", "--state", "merged"}, {"prs", "--sort", "closed"}, {"issues", "--sort", "merged"}} {
 		out, _, err := execute(t, args...)
-		if err == nil || out != "" || strings.Contains(err.Error(), "load config") || ExitCode(err) != ExitPreflight {
-			t.Errorf("execute(%v) = %q, %v (exit %d), want a preflight error", args, out, err, ExitCode(err))
+		if err == nil || out != "" || strings.Contains(err.Error(), "load config") || exitstatus.ExitCode(err) != exitstatus.ExitPreflight {
+			t.Errorf("execute(%v) = %q, %v (exit %d), want a preflight error", args, out, err, exitstatus.ExitCode(err))
 		}
 	}
 }
@@ -118,10 +108,10 @@ func TestSyncBatchJSONContinuesAfterFailure(t *testing.T) {
 	}
 	t.Setenv("CODE_DIR", root)
 	out, _, err := execute(t, "sync", "--config", configPath, "--json")
-	if err == nil || !json.Valid([]byte(out)) || ExitCode(err) != ExitWork {
-		t.Fatalf("partial sync = %q, %v (exit %d), want a work failure with a report", out, err, ExitCode(err))
+	if err == nil || !json.Valid([]byte(out)) || exitstatus.ExitCode(err) != exitstatus.ExitWork {
+		t.Fatalf("partial sync = %q, %v (exit %d), want a work failure with a report", out, err, exitstatus.ExitCode(err))
 	}
-	var report checkoutReport
+	var report checkoutreport.Report
 	if err := json.Unmarshal([]byte(out), &report); err != nil {
 		t.Fatal(err)
 	}

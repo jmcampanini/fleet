@@ -1,41 +1,6 @@
-package cmd
+package cli
 
-import (
-	"errors"
-
-	"github.com/spf13/cobra"
-)
-
-// Exit statuses by phase. Preflight covers everything before repository
-// work starts; work covers failures whose report has already been written.
-const (
-	ExitSuccess   = 0
-	ExitWork      = 1
-	ExitPreflight = 2
-)
-
-// workError marks a failure raised after repository work started, so the
-// process exits ExitWork rather than ExitPreflight.
-type workError struct {
-	err error
-}
-
-func (e workError) Error() string { return e.err.Error() }
-
-func (e workError) Unwrap() error { return e.err }
-
-// ExitCode maps an error returned by the root command to a process exit
-// status.
-func ExitCode(err error) int {
-	if err == nil {
-		return ExitSuccess
-	}
-	var afterWork workError
-	if errors.As(err, &afterWork) {
-		return ExitWork
-	}
-	return ExitPreflight
-}
+import "github.com/spf13/cobra"
 
 func exitCodesTopic() *cobra.Command {
 	return &cobra.Command{

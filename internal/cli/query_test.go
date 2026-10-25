@@ -1,7 +1,6 @@
-package cmd
+package cli
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -9,20 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jmcampanini/fleet/internal/exitstatus"
 	"github.com/jmcampanini/fleet/internal/query"
 	"github.com/spf13/cobra"
 )
-
-func render(t *testing.T, write func(*cobra.Command) error) string {
-	t.Helper()
-	var out bytes.Buffer
-	command := &cobra.Command{}
-	command.SetOut(&out)
-	if err := write(command); err != nil {
-		t.Fatal(err)
-	}
-	return out.String()
-}
 
 func TestQueryFailureExitsAfterWritingReport(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "fleet.toml")
@@ -33,8 +22,8 @@ func TestQueryFailureExitsAfterWritingReport(t *testing.T) {
 
 	out, _, err := execute(t, "issues", "--config", path, "--json")
 
-	if err == nil || ExitCode(err) != ExitWork || !json.Valid([]byte(out)) {
-		t.Fatalf("issues without gh = %q, %v (exit %d), want a work failure with a report", out, err, ExitCode(err))
+	if err == nil || exitstatus.ExitCode(err) != exitstatus.ExitWork || !json.Valid([]byte(out)) {
+		t.Fatalf("issues without gh = %q, %v (exit %d), want a work failure with a report", out, err, exitstatus.ExitCode(err))
 	}
 	var report query.Report
 	if err := json.Unmarshal([]byte(out), &report); err != nil {

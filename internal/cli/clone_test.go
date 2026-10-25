@@ -1,10 +1,13 @@
-package cmd
+package cli
 
 import (
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/jmcampanini/fleet/internal/checkoutreport"
+	"github.com/jmcampanini/fleet/internal/exitstatus"
 )
 
 func TestCloneAllContinuesAfterFailureAndPreservesContent(t *testing.T) {
@@ -26,10 +29,10 @@ func TestCloneAllContinuesAfterFailureAndPreservesContent(t *testing.T) {
 
 	out, _, err := execute(t, "clone", "--all", "--config", configPath, "--json")
 
-	if err == nil || !json.Valid([]byte(out)) || ExitCode(err) != ExitWork {
-		t.Fatalf("clone over non-checkout directories = %q, %v (exit %d), want a work failure with a report", out, err, ExitCode(err))
+	if err == nil || !json.Valid([]byte(out)) || exitstatus.ExitCode(err) != exitstatus.ExitWork {
+		t.Fatalf("clone over non-checkout directories = %q, %v (exit %d), want a work failure with a report", out, err, exitstatus.ExitCode(err))
 	}
-	var report checkoutReport
+	var report checkoutreport.Report
 	if err := json.Unmarshal([]byte(out), &report); err != nil {
 		t.Fatal(err)
 	}

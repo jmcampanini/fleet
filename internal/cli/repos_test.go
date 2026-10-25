@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"encoding/json"
@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmcampanini/fleet/internal/exitstatus"
 	"github.com/jmcampanini/fleet/internal/repos"
 	"github.com/spf13/cobra"
 )
@@ -54,8 +55,8 @@ func TestReposTopicFailureExitsAfterWritingReport(t *testing.T) {
 
 	out, _, err := execute(t, "repos", "--config", configPath, "--json")
 
-	if err == nil || ExitCode(err) != ExitWork || !json.Valid([]byte(out)) {
-		t.Fatalf("repos without gh = %q, %v (exit %d), want a work failure with a report", out, err, ExitCode(err))
+	if err == nil || exitstatus.ExitCode(err) != exitstatus.ExitWork || !json.Valid([]byte(out)) {
+		t.Fatalf("repos without gh = %q, %v (exit %d), want a work failure with a report", out, err, exitstatus.ExitCode(err))
 	}
 	var report repos.Report
 	if err := json.Unmarshal([]byte(out), &report); err != nil {
@@ -78,8 +79,8 @@ func TestReposRequiresCodeDirOnlyWhenRepositoriesAreSelected(t *testing.T) {
 	t.Setenv("PATH", "")
 
 	out, _, err := execute(t, "repos", "--config", configPath, "--no-topics")
-	if err == nil || out != "" || ExitCode(err) != ExitPreflight || !strings.Contains(err.Error(), "CODE_DIR") {
-		t.Errorf("repos without CODE_DIR = %q, %v (exit %d), want a CODE_DIR preflight error", out, err, ExitCode(err))
+	if err == nil || out != "" || exitstatus.ExitCode(err) != exitstatus.ExitPreflight || !strings.Contains(err.Error(), "CODE_DIR") {
+		t.Errorf("repos without CODE_DIR = %q, %v (exit %d), want a CODE_DIR preflight error", out, err, exitstatus.ExitCode(err))
 	}
 
 	out, _, err = execute(t, "repos", "--config", configPath, "--group", "empty", "--json")

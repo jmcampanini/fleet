@@ -20,14 +20,14 @@ description = "Build build/fleet with git-derived version metadata."
 run = '''
 version="${VERSION:-$(git describe --tags --dirty --always 2>/dev/null || printf 'unknown')}"
 mkdir -p build
-go build -trimpath -buildvcs=false -ldflags "-X github.com/jmcampanini/fleet/cmd.Version=${version}" -o build/fleet .
+go build -trimpath -buildvcs=false -ldflags "-X github.com/jmcampanini/fleet/internal/cli.Version=${version}" -o build/fleet .
 '''
 
 [tasks.install]
 description = "Install the CLI with git-derived version metadata."
 run = '''
 version="${VERSION:-$(git describe --tags --dirty --always 2>/dev/null || printf 'unknown')}"
-go install -trimpath -buildvcs=false -ldflags "-X github.com/jmcampanini/fleet/cmd.Version=${version}" .
+go install -trimpath -buildvcs=false -ldflags "-X github.com/jmcampanini/fleet/internal/cli.Version=${version}" .
 '''
 
 [tasks.test]

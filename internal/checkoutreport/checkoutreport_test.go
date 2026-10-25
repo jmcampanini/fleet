@@ -1,14 +1,10 @@
-package cmd
+package checkoutreport
 
 import (
 	"bytes"
-	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/jmcampanini/fleet/internal/checkout"
-	"github.com/jmcampanini/fleet/internal/inventory"
 )
 
 func TestWriteResultDescribesEachOutcomeOnOneLine(t *testing.T) {
@@ -87,12 +83,12 @@ func TestWriteResultDescribesEachOutcomeOnOneLine(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var out bytes.Buffer
-			if err := writeResult(&out, "one", 3, tc.result); err != nil {
+			if err := WriteResult(&out, "one", 3, tc.result); err != nil {
 				t.Fatal(err)
 			}
 
 			if out.String() != tc.want {
-				t.Errorf("writeResult(%+v) = %q, want %q", tc.result, out.String(), tc.want)
+				t.Errorf("WriteResult(%+v) = %q, want %q", tc.result, out.String(), tc.want)
 			}
 		})
 	}
@@ -101,85 +97,44 @@ func TestWriteResultDescribesEachOutcomeOnOneLine(t *testing.T) {
 func TestWriteSummaryCountsStatusesInWords(t *testing.T) {
 	cases := []struct {
 		name   string
-		report checkoutReport
+		report Report
 		want   string
 	}{
 		{
 			name: "mixed sync",
-			report: checkoutReport{Results: []checkout.Result{
+			report: Report{Results: []checkout.Result{
 				{Status: checkout.StatusCurrent}, {Status: checkout.StatusCurrent}, {Status: checkout.StatusUpdated}, {Status: checkout.StatusMissing}, {Status: checkout.StatusFailed},
 			}},
 			want: "\n5 repositories: 1 failed, 1 missing, 1 updated, 2 up to date\n",
 		},
 		{
 			name: "mixed clone",
-			report: checkoutReport{Results: []checkout.Result{
+			report: Report{Results: []checkout.Result{
 				{Status: checkout.StatusPresent}, {Status: checkout.StatusCloned}, {Status: checkout.StatusFailed},
 			}},
 			want: "\n3 repositories: 1 failed, 1 cloned, 1 present\n",
 		},
 		{
 			name:   "dry run",
-			report: checkoutReport{DryRun: true, Results: []checkout.Result{{Status: checkout.StatusPlanned}}},
+			report: Report{DryRun: true, Results: []checkout.Result{{Status: checkout.StatusPlanned}}},
 			want:   "\n1 repository: 1 planned (dry run)\n",
 		},
 		{
 			name:   "empty selection",
-			report: checkoutReport{Complete: true, Results: []checkout.Result{}},
+			report: Report{Complete: true, Results: []checkout.Result{}},
 			want:   "0 repositories\n",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var out bytes.Buffer
-			if err := writeSummary(&out, tc.report); err != nil {
+			if err := WriteSummary(&out, tc.report); err != nil {
 				t.Fatal(err)
 			}
 
 			if out.String() != tc.want {
-				t.Errorf("writeSummary(%+v) = %q, want %q", tc.report, out.String(), tc.want)
+				t.Errorf("WriteSummary(%+v) = %q, want %q", tc.report, out.String(), tc.want)
 			}
 		})
-	}
-}
-
-func TestRunCheckoutAlignsRowsBeforeTheNextStep(t *testing.T) {
-	configDir := filepath.Join(t.TempDir(), "fleet")
-	if err := os.MkdirAll(configDir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(configDir, "fleet.toml"), []byte("[repos.\"github.com/a/one\"]\n[repos.\"github.com/a/two-longer\"]\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("XDG_CONFIG_HOME", filepath.Dir(configDir))
-	t.Setenv("CODE_DIR", t.TempDir())
-	root := NewRoot()
-	var stdout bytes.Buffer
-	root.SetOut(&stdout)
-	sync, _, err := root.Find([]string{"sync"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := sync.ParseFlags(nil); err != nil {
-		t.Fatal(err)
-	}
-	sync.SetContext(context.Background())
-
-	var seen []string
-	step := func(_ context.Context, _ string, repo inventory.Repository, _ bool) checkout.Result {
-		seen = append(seen, stdout.String())
-		return checkout.Result{Repository: repo.ID, Branch: "main", Commit: "abc1234567", Status: checkout.StatusCurrent}
-	}
-	if err := runCheckout(sync, checkoutRun{step: step}); err != nil {
-		t.Fatalf("runCheckout = %v, want success", err)
-	}
-
-	if len(seen) != 2 || seen[0] != "" || seen[1] != "\ueab2  one         current  abc1234 (main)\n" {
-		t.Errorf("stdout before each step = %q, want the first line written before the second step", seen)
-	}
-	want := "\ueab2  one         current  abc1234 (main)\n" +
-		"\ueab2  two-longer  current  abc1234 (main)\n\n2 repositories: 2 up to date\n"
-	if stdout.String() != want {
-		t.Errorf("stdout = %q, want %q", stdout.String(), want)
 	}
 }
