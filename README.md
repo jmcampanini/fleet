@@ -1,13 +1,11 @@
 # fleet
 
-Fleet clones the primary Git checkouts of a configured repository inventory into `$CODE_DIR/server/org/repo`, keeps them on their intended branches with fast-forward updates, describes the inventory with each repository's GitHub topics, and lists issues and pull requests across the same inventory. `clone` and `sync` are separate commands: sync never clones, and clone never updates an existing checkout. Fleet never stashes, resets, rebases, pushes, or deletes local work.
-
-Command help is the canonical reference: `fleet --help` and each command's `--help` describe every user-facing contract, `fleet config --help` describes the TOML format, discovery, and precedence, `fleet help exit-codes` describes exit statuses, and `fleet help json-reports` describes the fields of every `--json` report.
+Fleet clones the primary Git checkouts of a configured repository inventory into `$CODE_DIR/server/org/repo`, keeps them on their intended branches with fast-forward updates, describes the inventory with each repository's GitHub topics, and lists issues and pull requests across the same inventory. `clone` and `sync` are separate commands: sync never clones, and clone never updates an existing checkout. Fleet never stashes, resets, rebases, pushes, or deletes local work, and it never prompts or reads credentials from stdin.
 
 
 ## Install
 
-Fleet distributes from HEAD only; there is no release channel or tagged binary.
+Fleet supports macOS and Linux. It distributes from HEAD only; there is no release channel or tagged binary.
 
 
 ### Homebrew
@@ -28,6 +26,8 @@ brew upgrade --fetch-HEAD fleet
 
 ```sh
 brew install git mise
+git clone https://github.com/jmcampanini/fleet
+cd fleet
 mise trust
 mise install
 mise run build
@@ -50,15 +50,18 @@ mise run build
 | `fleet groups --group agents` | List the resolved repository members of a configured group. |
 | `fleet config --provenance` | Print the effective configuration with each field's source. |
 
+The canonical reference is `fleet --help`, each command's `--help`, and the help topics `fleet exit-codes` and `fleet json-reports`.
+
 
 ## Required external programs
 
-Fleet runs `git` for `clone` and `sync`, and `gh` for `repos`, `issues`, and `prs`. Both must be on `PATH`, and `gh` must already be authenticated; Fleet never prompts or reads credentials from stdin. `clone`, `sync`, and `repos` also require `CODE_DIR` to name an absolute, existing directory. Fleet supports macOS and Linux.
+- `git` must be on `PATH` and already authenticated for `clone` and `sync`.
+- `gh` must be on `PATH` and already authenticated for `repos`, `issues`, and `prs`.
 
 
 ## Configuration
 
-Fleet reads `$XDG_CONFIG_HOME/fleet/fleet.toml`, or `~/.config/fleet/fleet.toml` when `XDG_CONFIG_HOME` is empty; `--config PATH` replaces discovery, and the file must exist. The inventory and groups come only from the TOML file. The issue and pull request limits can also come from `FLEET_ISSUES_LIMIT`, `FLEET_PRS_LIMIT`, `--issues-limit`, and `--prs-limit`. A minimal file:
+Fleet reads `$XDG_CONFIG_HOME/fleet/fleet.toml`, or `~/.config/fleet/fleet.toml` when `XDG_CONFIG_HOME` is empty. A minimal file:
 
 ```toml
 [repos."github.com/jmcampanini/gibson"]
@@ -70,4 +73,4 @@ branch = "develop"
 agents = ["gibson", "molly"]
 ```
 
-`fleet config --help` documents the format and precedence, and `fleet config` prints the values in effect.
+`fleet config --help` documents the format and precedence.
