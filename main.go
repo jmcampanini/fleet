@@ -5,9 +5,8 @@ import (
 	"os"
 
 	"github.com/jmcampanini/fleet/internal/cli"
-	"github.com/jmcampanini/fleet/internal/exitstatus"
 )
 
 func main() {
-	os.Exit(exitstatus.ExitCode(cli.Execute()))
+	os.Exit(cli.Execute())
 }

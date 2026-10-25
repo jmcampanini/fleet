@@ -21,23 +21,30 @@ type querySpec struct {
 	short    string
 }
 
-// newQuery builds a listing command; issues and prs share every flag,
-// the selection and ordering contract, and the report shape.
-func newQuery(spec querySpec) *cobra.Command {
-	var selection selection
-	var jsonOutput bool
-	var state, sort, order string
-	command := &cobra.Command{
+// queryFlags holds the flag values a listing command reads; each command
+// file binds them so its flags are declared beside its help.
+type queryFlags struct {
+	selection  selection
+	jsonOutput bool
+	state      string
+	sort       string
+	order      string
+}
+
+// newQuery builds a listing command; issues and prs share the selection and
+// ordering contract and the report shape.
+func newQuery(spec querySpec, flags *queryFlags) *cobra.Command {
+	return &cobra.Command{
 		Use: string(spec.resource) + " [repository ...]", Short: spec.short,
 		Long:    spec.long + "\n\n" + queryHelp + "\n\n" + selectionHelp + "\n\n" + configHelp + "\n\n" + outputHelp,
 		Example: spec.example,
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, refs []string) error {
-			options := query.Options{Resource: spec.resource, State: query.State(state), Sort: query.Sort(sort), Order: query.Order(order)}
+			options := query.Options{Resource: spec.resource, State: query.State(flags.state), Sort: query.Sort(flags.sort), Order: query.Order(flags.order)}
 			if err := options.Validate(); err != nil {
 				return err
 			}
-			loaded, repos, err := selection.resolve(cmd, refs)
+			loaded, repos, err := flags.selection.resolve(cmd, refs)
 			if err != nil {
 				return err
 			}
@@ -48,7 +55,7 @@ func newQuery(spec querySpec) *cobra.Command {
 
 			report := (query.Client{Run: process.Execute}).List(cmd.Context(), repos, options)
 
-			if err := renderQuery(cmd, report, jsonOutput); err != nil {
+			if err := renderQuery(cmd, report, flags.jsonOutput); err != nil {
 				return exitstatus.WorkError{Err: err}
 			}
 			if !report.Complete {
@@ -57,12 +64,6 @@ func newQuery(spec querySpec) *cobra.Command {
 			return nil
 		},
 	}
-	selection.bind(command.Flags())
-	command.Flags().StringVar(&state, "state", string(query.StateOpen), "State: open, closed, all; prs also accepts merged")
-	command.Flags().StringVar(&sort, "sort", "", "Sort: created, updated, closed; prs also accepts merged")
-	command.Flags().StringVar(&order, "order", string(query.OrderDesc), "Timestamp order: asc or desc")
-	command.Flags().BoolVar(&jsonOutput, "json", false, "Emit a JSON report")
-	return command
 }
 
 func renderQuery(cmd *cobra.Command, report query.Report, jsonOutput bool) error {

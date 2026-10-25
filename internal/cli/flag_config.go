@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// configPath reads the root --config flag and rejects an explicit empty path.
 func configPath(cmd *cobra.Command) (string, error) {
 	path, err := cmd.Flags().GetString("config")
 	if err != nil {

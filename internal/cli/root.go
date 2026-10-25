@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/jmcampanini/fleet/internal/config"
+	"github.com/jmcampanini/fleet/internal/exitstatus"
 	"github.com/jmcampanini/go-config-loader/pflagloader"
 	"github.com/spf13/cobra"
 )
@@ -46,13 +47,14 @@ each repository's path, groups, and GitHub topics.
 	return root
 }
 
-// Execute runs the command tree with signal cancellation and prints failures.
-func Execute() error {
+// Execute runs the command tree with signal cancellation, prints failures,
+// and returns the process exit status.
+func Execute() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	err := NewRoot().ExecuteContext(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fleet: %s\n", err)
 	}
-	return err
+	return exitstatus.ExitCode(err)
 }
