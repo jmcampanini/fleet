@@ -4,9 +4,11 @@ Fleet clones the primary Git checkouts of a configured repository inventory into
 
 Command help is the canonical reference: `fleet --help` and each command's `--help` describe every user-facing contract, `fleet config --help` describes the TOML format, discovery, and precedence, `fleet help exit-codes` describes exit statuses, and `fleet help json-reports` describes the fields of every `--json` report.
 
+
 ## Install
 
 Fleet distributes from HEAD only; there is no release channel or tagged binary.
+
 
 ### Homebrew
 
@@ -21,6 +23,7 @@ Upgrade to the latest commit:
 brew upgrade --fetch-HEAD fleet
 ```
 
+
 ### From source
 
 ```sh
@@ -30,6 +33,7 @@ mise install
 mise run build
 # then copy ./build/fleet to a directory on your PATH
 ```
+
 
 ## Representative commands
 
@@ -46,9 +50,11 @@ mise run build
 | `fleet groups --group agents` | List the resolved repository members of a configured group. |
 | `fleet config --provenance` | Print the effective configuration with each field's source. |
 
+
 ## Required external programs
 
 Fleet runs `git` for `clone` and `sync`, and `gh` for `repos`, `issues`, and `prs`. Both must be on `PATH`, and `gh` must already be authenticated; Fleet never prompts or reads credentials from stdin. `clone`, `sync`, and `repos` also require `CODE_DIR` to name an absolute, existing directory. Fleet supports macOS and Linux.
+
 
 ## Configuration
 
