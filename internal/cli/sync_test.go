@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"encoding/json"
@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jmcampanini/fleet/internal/checkoutreport"
 )
 
 func TestSyncWarnsAboutMissingCheckoutAndSucceeds(t *testing.T) {
@@ -22,7 +24,7 @@ func TestSyncWarnsAboutMissingCheckoutAndSucceeds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sync with missing checkout = %q, %v, want success", out, err)
 	}
-	var report checkoutReport
+	var report checkoutreport.Report
 	if err := json.Unmarshal([]byte(out), &report); err != nil {
 		t.Fatal(err)
 	}

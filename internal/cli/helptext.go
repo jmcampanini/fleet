@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 // Shared fragments compose command help so repeated contracts cannot drift.
 const selectionHelp = `Selection:

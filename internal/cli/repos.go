@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"encoding/json"
@@ -8,8 +8,10 @@ import (
 	"strings"
 
 	"github.com/jmcampanini/fleet/internal/checkout"
+	"github.com/jmcampanini/fleet/internal/exitstatus"
 	"github.com/jmcampanini/fleet/internal/process"
 	"github.com/jmcampanini/fleet/internal/repos"
+	"github.com/jmcampanini/fleet/internal/textformat"
 	"github.com/spf13/cobra"
 )
 
@@ -58,10 +60,10 @@ Paths:
 			report := (repos.Client{Run: process.Execute}).List(cmd.Context(), root, selected, !noTopics)
 
 			if err := renderRepos(cmd, report, jsonOutput); err != nil {
-				return workError{err}
+				return exitstatus.WorkError{Err: err}
 			}
 			if !report.Complete {
-				return workError{errors.New("one or more repositories failed; see the report or pass --no-topics")}
+				return exitstatus.WorkError{Err: errors.New("one or more repositories failed; see the report or pass --no-topics")}
 			}
 			return nil
 		},
@@ -81,7 +83,7 @@ func renderRepos(cmd *cobra.Command, report repos.Report, jsonOutput bool) error
 	rows := make([][]string, 0, len(report.Results))
 	failed := 0
 	for _, entry := range report.Results {
-		rows = append(rows, []string{entry.Repository, "branch=" + orDefault(entry.Branch, "default"), "groups=" + orDefault(strings.Join(entry.Groups, ","), "-"), "topics=" + orDefault(strings.Join(entry.Topics, ","), "-"), firstLine(entry.Error)})
+		rows = append(rows, []string{entry.Repository, "branch=" + orDefault(entry.Branch, "default"), "groups=" + orDefault(strings.Join(entry.Groups, ","), "-"), "topics=" + orDefault(strings.Join(entry.Topics, ","), "-"), textformat.FirstLine(entry.Error)})
 		if entry.Error != "" {
 			failed++
 		}
@@ -92,7 +94,7 @@ func renderRepos(cmd *cobra.Command, report repos.Report, jsonOutput bool) error
 	if report.TopicsFetched {
 		topics = "topics fetched"
 	}
-	fmt.Fprintf(&out, "%s, %s", countNoun(len(report.Results), "repository", "repositories"), topics)
+	fmt.Fprintf(&out, "%s, %s", textformat.CountNoun(len(report.Results), "repository", "repositories"), topics)
 	if failed > 0 {
 		fmt.Fprintf(&out, ", %d failed", failed)
 	}
@@ -106,4 +108,32 @@ func orDefault(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+// writeColumns renders rows as space-separated columns padded to the widest
+// cell in each column, so human reports line up. The last column is never
+// padded and trailing whitespace is trimmed, so empty cells cost nothing.
+func writeColumns(out *strings.Builder, rows [][]string) {
+	var widths []int
+	for _, row := range rows {
+		for i, cell := range row {
+			if i >= len(widths) {
+				widths = append(widths, 0)
+			}
+			widths[i] = max(widths[i], len(cell))
+		}
+	}
+
+	for _, row := range rows {
+		var line strings.Builder
+		for i, cell := range row {
+			if i < len(row)-1 {
+				fmt.Fprintf(&line, "%-*s  ", widths[i], cell)
+			} else {
+				line.WriteString(cell)
+			}
+		}
+		out.WriteString(strings.TrimRight(line.String(), " "))
+		out.WriteByte('\n')
+	}
 }

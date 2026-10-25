@@ -1,10 +1,15 @@
-// Package cmd connects Fleet's inventory and repository operations to Cobra.
-package cmd
+// Package cli connects Fleet's inventory and repository operations to Cobra.
+package cli
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/jmcampanini/fleet/internal/config"
+	"github.com/jmcampanini/fleet/internal/exitstatus"
 	"github.com/jmcampanini/go-config-loader/pflagloader"
 	"github.com/spf13/cobra"
 )
@@ -42,13 +47,14 @@ each repository's path, groups, and GitHub topics.
 	return root
 }
 
-func configPath(cmd *cobra.Command) (string, error) {
-	path, err := cmd.Flags().GetString("config")
+// Execute runs the command tree with signal cancellation, prints failures,
+// and returns the process exit status.
+func Execute() int {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	err := NewRoot().ExecuteContext(ctx)
 	if err != nil {
-		return "", err
+		fmt.Fprintf(os.Stderr, "fleet: %s\n", err)
 	}
-	if cmd.Flags().Changed("config") && path == "" {
-		return "", fmt.Errorf("--config requires a nonempty file path")
-	}
-	return path, nil
+	return exitstatus.ExitCode(err)
 }
