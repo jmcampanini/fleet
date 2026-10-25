@@ -12,9 +12,7 @@ node = "24.21.0"
 "npm:markdownlint-cli2" = "0.24.0"
 
 [env]
-# Go's default GOTOOLCHAIN=auto lets it download and run whatever toolchain
-# go.mod asks for. local pins execution to the Go that mise installed, so
-# mise.toml is the only place the toolchain version is decided.
+# Go's default GOTOOLCHAIN=auto lets it download and run whatever toolchain go.mod asks for. local pins execution to the Go that mise installed, so mise.toml is the only place the toolchain version is decided.
 GOTOOLCHAIN = "local"
 
 [tasks.build]
@@ -79,9 +77,7 @@ fi
 description = "Check dependencies and reachable code for known vulnerabilities."
 run = "govulncheck ./..."
 
-# check is read-only: it must leave the tracked tree unchanged and create
-# nothing outside ignored paths. CI diffs `git status` before and after it.
-# Add report-only tasks here; fixers (fmt, tidy) stay out.
+# check is read-only: it must leave the tracked tree unchanged and create nothing outside ignored paths. CI fails if `git status --porcelain` reports anything after it. Add report-only tasks here; fixers (fmt, tidy) stay out.
 [tasks.check]
 description = "Run the complete local verification contract."
 depends = ["fmt-check", "tidy-check", "lint", "lint-markdown", "test", "build", "version-check", "vuln"]
