@@ -35,10 +35,11 @@ one section. Positional arguments and comma-separated names are not
 supported. Invalid configuration or an unknown group fails before output.
 
 Results go to stdout; diagnostics go to stderr. --json emits one object
-containing a groups array; see 'fleet json-reports' for its fields.
+containing a groups array; see 'fleet help json-reports' for its fields.
 No configured groups succeeds with 'No groups configured.' on stderr and
 empty stdout, or {"groups":[]} with --json. Success exits 0; errors exit 2.
-This command needs no CODE_DIR, Git, gh, local checkout, or network.
+This command never prompts and needs no CODE_DIR, Git, gh, local checkout,
+terminal, or network.
 
 ` + configHelp,
 		Example: `  fleet groups

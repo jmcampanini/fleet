@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/jmcampanini/fleet/internal/config"
@@ -27,17 +28,25 @@ clone and sync are separate commands: sync never clones, and clone never
 updates an existing checkout. repos describes the inventory itself, with
 each repository's path, groups, and GitHub topics.
 
-` + configHelp + "\n\n" + selectionHelp + "\n\n" + outputHelp,
-		Example: `  fleet clone --all
-  fleet sync gibson molly --group clis --dry-run
-  fleet repos --json
-  fleet issues --issues-limit 30
-  fleet prs --state merged
-  fleet groups
-  fleet config --provenance`,
-		Args: cobra.NoArgs, SilenceErrors: true, SilenceUsage: true, Version: Version,
+Fleet runs two external programs, which must be on PATH and already
+authenticated: git for clone and sync, and gh for repos, issues, and prs.
+Every other command needs neither.
+
+` + configHelp + "\n\n" + selectionHelp + "\n\n" + outputHelp + `
+
+Common tasks:
+  Clone every repository:           fleet clone --all
+  Preview a sync without changes:   fleet sync gibson --group clis --dry-run
+  Describe the inventory as JSON:   fleet repos --json
+  List the 30 newest open issues:   fleet issues --issues-limit 30
+  List merged pull requests:        fleet prs --state merged
+  List groups and their members:    fleet groups
+  Show configuration with sources:  fleet config --provenance`,
+		DisableSuggestions: true, SilenceErrors: true, SilenceUsage: true, Version: Version,
 		RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
+	root.InitDefaultHelpFlag()
+	root.InitDefaultVersionFlag()
 	root.PersistentFlags().String("config", "", "Read this required TOML file instead of the default")
 	if err := pflagloader.Register[config.Config](root.PersistentFlags()); err != nil {
 		// Registration depends only on this package's static configuration type.
@@ -47,14 +56,17 @@ each repository's path, groups, and GitHub topics.
 	return root
 }
 
-// Execute runs the command tree with signal cancellation, prints failures,
-// and returns the process exit status.
+// Execute runs the command tree with signal cancellation, prints a failure
+// as one stderr line, and returns the process exit status.
 func Execute() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	err := NewRoot().ExecuteContext(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fleet: %s\n", err)
+		// A path or external message may carry line breaks; the diagnostic
+		// stays one line so a script can read it whole.
+		message := strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ").Replace(err.Error())
+		fmt.Fprintf(os.Stderr, "fleet: %s\n", message)
 	}
 	return exitstatus.ExitCode(err)
 }

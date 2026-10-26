@@ -38,12 +38,13 @@ const outputHelp = `Output and dependencies:
   and completed actions. Success exits 0.
   Partial or incomplete results exit 1 after the report is written.
   Preflight errors exit 2 and leave stdout empty.
-  Commands do not prompt or read credentials from stdin. Git and gh must
-  already be authenticated. Each subprocess has a 120-second timeout;
-  Git SSH uses batch mode and a 15-second connection timeout.
+  Commands never prompt, read credentials from stdin, or need an interactive
+  terminal. Git and gh must already be authenticated. Each subprocess has a
+  120-second timeout; Git SSH uses batch mode and a 15-second connection
+  timeout.
   Help, version, and shell completion need no configuration or network.
-  See 'fleet exit-codes' for exit status and 'fleet json-reports' for the
-  fields of every --json report.`
+  See 'fleet help exit-codes' for exit status and 'fleet help json-reports'
+  for the fields of every --json report.`
 
 const queryHelp = `Ordering:
   Open items default to created descending; closed items to closed
