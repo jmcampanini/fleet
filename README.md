@@ -8,33 +8,16 @@ Fleet clones the primary Git checkouts of a configured repository inventory into
 Fleet's release distribution provides prebuilt binaries for Linux and macOS on amd64 and arm64. The first release has not been published yet; until then, use the HEAD formula or build from source below.
 
 
-### Homebrew
-
-After the first release:
-
 ```sh
-brew install --cask jmcampanini/tap/fleet
-brew upgrade --cask jmcampanini/tap/fleet
+brew install --cask jmcampanini/tap/fleet # Install with Homebrew
+brew upgrade --cask jmcampanini/tap/fleet # Upgrade with Homebrew
+mise use -g github:jmcampanini/fleet     # Install with mise
+mise upgrade github:jmcampanini/fleet    # Upgrade with mise
 ```
 
-Homebrew installs Git, gh, and bash, zsh, and fish completions. Git and gh still need authentication as described under required external programs.
+Homebrew installs Git, gh, and bash, zsh, and fish completions. For mise or archive installations, install Git and gh separately. Authentication prerequisites are listed under required external programs.
 
-
-### mise
-
-After the first release:
-
-```sh
-mise use -g github:jmcampanini/fleet
-mise upgrade github:jmcampanini/fleet
-```
-
-Install Git and gh separately and authenticate them before using Fleet.
-
-
-### Release archives
-
-After the first release, download the archive for your OS and architecture from the [releases page](https://github.com/jmcampanini/fleet/releases), extract it, and copy `fleet` onto your `PATH`. To upgrade, download the new release and replace the binary. Releases include SHA-256 checksums and GitHub build provenance attestations. On macOS, if a browser download is quarantined, run `xattr -d com.apple.quarantine fleet` on the extracted binary before running it. Install Git and gh separately and authenticate them before using Fleet.
+Or download an archive for your OS and architecture from the [releases page](https://github.com/jmcampanini/fleet/releases), extract it, and copy `fleet` onto your `PATH`. To upgrade, replace the binary with the new release. Releases include SHA-256 checksums and GitHub build provenance attestations. On macOS, if a browser download is quarantined, run `xattr -d com.apple.quarantine fleet` on the extracted binary before running it.
 
 
 ### Homebrew from HEAD
@@ -52,7 +35,7 @@ Upgrade to the latest commit:
 brew upgrade --fetch-HEAD jmcampanini/fleet/fleet
 ```
 
-The HEAD formula and release cask both install `fleet`; choose one. To switch to the release cask after the first release, uninstall the HEAD formula first with `brew uninstall --formula jmcampanini/fleet/fleet`, then install the cask above.
+The HEAD formula and release cask both install `fleet`; choose one. To switch to the cask, first run `brew uninstall --formula jmcampanini/fleet/fleet`, then install the cask above.
 
 
 ### From source
