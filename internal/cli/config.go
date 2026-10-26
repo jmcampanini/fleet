@@ -38,9 +38,9 @@ Keys:
     branch name.
   groups.<name>
     Array of repository references: repo, org/repo, or server/org/repo.
-    Short names must be unique across the inventory, and every member
-    must resolve to a configured repository. Groups hold repositories
-    only, never other groups. An empty array is valid. A group name is
+    Each reference must match exactly one configured repository; an
+    ambiguous short name fails. Groups hold repositories only, never
+    other groups. An empty array is valid. A group name is
     nonempty and contains no comma, tab, line break, or NUL.
 
 Unknown keys fail the load. An empty inventory is valid.

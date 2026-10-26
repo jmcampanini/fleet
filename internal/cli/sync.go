@@ -27,9 +27,9 @@ files, untracked files, dirty submodules, unfinished Git operations,
 detached HEAD, and target branches occupied by another worktree. Check
 target history before switching; reject ahead or diverged target commits.
 Unpushed feature-branch commits remain on their branch and do not block a
-clean switch. Fetch the target from origin before comparing history; then
-create a missing target branch with origin tracking, switch to it, and
-fast-forward as needed.
+clean switch. Fetch the target from origin, updating its remote-tracking
+ref, before comparing history; then create a missing target branch with
+origin tracking, switch to it, and fast-forward as needed.
 
 Directories that are not the configured checkout, symbolic links below
 CODE_DIR, and additional worktrees are rejected. Fleet never stashes,

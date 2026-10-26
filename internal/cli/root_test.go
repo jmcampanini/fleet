@@ -51,6 +51,11 @@ func TestExitCodesTopicListsEveryStatus(t *testing.T) {
 	}
 }
 
+// isHelpTopic reports whether command was built by newHelpTopic.
+func isHelpTopic(command *cobra.Command) bool {
+	return command.Annotations[helpTopicAnnotation] == "true"
+}
+
 // applicationCommands returns every command the repository defines, depth
 // first from the root, skipping the help and completion subtrees cobra adds.
 func applicationCommands(t *testing.T) []*cobra.Command {
@@ -58,7 +63,7 @@ func applicationCommands(t *testing.T) []*cobra.Command {
 	var commands []*cobra.Command
 	var walk func(*cobra.Command)
 	walk = func(command *cobra.Command) {
-		if command.HasParent() && (command.Name() == "help" || command.Name() == "completion") {
+		if command.Name() == "help" || command.Name() == "completion" {
 			return
 		}
 		commands = append(commands, command)
