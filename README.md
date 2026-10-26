@@ -5,10 +5,41 @@ Fleet clones the primary Git checkouts of a configured repository inventory into
 
 ## Install
 
-Fleet supports macOS and Linux. It distributes from HEAD only; there is no release channel or tagged binary.
+Fleet's release distribution provides prebuilt binaries for Linux and macOS on amd64 and arm64. The first release has not been published yet; until then, use the HEAD formula or build from source below.
 
 
 ### Homebrew
+
+After the first release:
+
+```sh
+brew install --cask jmcampanini/tap/fleet
+brew upgrade --cask jmcampanini/tap/fleet
+```
+
+Homebrew installs Git, gh, and bash, zsh, and fish completions. Git and gh still need authentication as described under required external programs.
+
+
+### mise
+
+After the first release:
+
+```sh
+mise use -g github:jmcampanini/fleet
+mise upgrade github:jmcampanini/fleet
+```
+
+Install Git and gh separately and authenticate them before using Fleet.
+
+
+### Release archives
+
+After the first release, download the archive for your OS and architecture from the [releases page](https://github.com/jmcampanini/fleet/releases), extract it, and copy `fleet` onto your `PATH`. To upgrade, download the new release and replace the binary. Releases include SHA-256 checksums and GitHub build provenance attestations. On macOS, if a browser download is quarantined, run `xattr -d com.apple.quarantine fleet` on the extracted binary before running it. Install Git and gh separately and authenticate them before using Fleet.
+
+
+### Homebrew from HEAD
+
+The existing HEAD formula remains an alternative that builds the latest source:
 
 ```sh
 brew tap jmcampanini/fleet https://github.com/jmcampanini/fleet
@@ -18,14 +49,16 @@ brew install --HEAD jmcampanini/fleet/fleet
 Upgrade to the latest commit:
 
 ```sh
-brew upgrade --fetch-HEAD fleet
+brew upgrade --fetch-HEAD jmcampanini/fleet/fleet
 ```
+
+The HEAD formula and release cask both install `fleet`; choose one. To switch to the release cask after the first release, uninstall the HEAD formula first with `brew uninstall --formula jmcampanini/fleet/fleet`, then install the cask above.
 
 
 ### From source
 
 ```sh
-brew install git mise
+brew install git gh mise
 git clone https://github.com/jmcampanini/fleet
 cd fleet
 mise trust

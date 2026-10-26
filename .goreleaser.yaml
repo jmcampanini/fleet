@@ -1,0 +1,89 @@
+# GoReleaser configuration. Run `mise run release-snapshot` to build release artifacts locally without publishing; the release workflow publishes on every version tag.
+version: 2
+
+project_name: fleet
+
+builds:
+  - id: fleet
+    main: .
+    binary: fleet
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+      - -buildvcs=false
+    ldflags:
+      # Keep the v prefix so a release binary reports the same string as `mise run build` on the tagged commit.
+      - -s -w -X github.com/jmcampanini/fleet/internal/cli.Version=v{{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+changelog:
+  # GitHub generates the notes from merged pull requests, shaped by .github/release.yml.
+  use: github-native
+
+release:
+  github:
+    owner: jmcampanini
+    name: fleet
+  draft: false
+  prerelease: auto
+
+homebrew_casks:
+  - name: fleet
+    homepage: https://github.com/jmcampanini/fleet
+    description: Sync Git repositories and list issues and pull requests across them
+    dependencies:
+      - formula: gh
+      - formula: git
+    binaries:
+      - fleet
+    # Runs `fleet completion <shell>` at install time, after the preflight hook below. Same shells as the Homebrew default for a formula.
+    generate_completions_from_executable:
+      executable: fleet
+      args:
+        - completion
+      shells:
+        - bash
+        - zsh
+        - fish
+    directory: Casks
+    commit_msg_template: "Update fleet to {{ .Tag }}"
+    commit_author:
+      name: github-actions[bot]
+      email: 41898282+github-actions[bot]@users.noreply.github.com
+    # Prerelease tags publish a GitHub Release but do not update the tap.
+    skip_upload: auto
+    # Pushed over SSH with a deploy key on the tap, since the workflow token cannot write to another repository.
+    repository:
+      owner: jmcampanini
+      name: homebrew-tap
+      branch: main
+      git:
+        url: ssh://git@github.com/jmcampanini/homebrew-tap.git
+        private_key: "{{ envOrDefault \"HOMEBREW_TAP_DEPLOY_KEY\" \"\" }}"
+    hooks:
+      pre:
+        # The binary is not notarized. Homebrew quarantines cask downloads, so remove the attribute before Homebrew runs completion generation, which happens before any postflight hook.
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/fleet"]
+          end
