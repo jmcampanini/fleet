@@ -10,15 +10,17 @@ const selectionHelp = `Selection:
   Invalid configuration or selection stops before repository work.`
 
 const configHelp = `Configuration:
-  Read $XDG_CONFIG_HOME/fleet/fleet.toml, or ~/.config/fleet/fleet.toml when
-  XDG_CONFIG_HOME is empty. Relative XDG_CONFIG_HOME follows go-config-loader
-  and currently resolves against the working directory. --config PATH
-  replaces discovery; the selected file must exist. No ancestor search runs.
+  Read $XDG_CONFIG_HOME/fleet/config.toml, or ~/.config/fleet/config.toml
+  when XDG_CONFIG_HOME is empty. Relative XDG_CONFIG_HOME follows
+  go-config-loader and currently resolves against the working directory.
+  A missing discovered file is not an error; Fleet then runs with defaults
+  and an empty inventory. --config PATH replaces discovery and must name a
+  file that exists. No ancestor search runs.
   Precedence is defaults, TOML, environment, then flags. Limits default to
   15 and must be positive. FLEET_ISSUES_LIMIT and FLEET_PRS_LIMIT override
   TOML; --issues-limit and --prs-limit override the environment.
   Inventory and groups come only from TOML. Overlay may compose the file;
-  Fleet does not run Overlay or discover profiles.`
+  Fleet does not run Overlay or select layers.`
 
 const outputHelp = `Output and dependencies:
   Results go to stdout; diagnostics go to stderr. clone and sync print every

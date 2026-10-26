@@ -73,13 +73,49 @@ func TestLayersAndProvenance(t *testing.T) {
 	}
 }
 
+func TestMissingDiscoveredFileLoadsDefaults(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	loaded, err := Load("", flags(t))
+	if err != nil {
+		t.Fatalf("Load(\"\") error = %v, want nil", err)
+	}
+	repos, err := loaded.Inventory.Select(nil, nil)
+	if err != nil || len(repos) != 0 || loaded.Config.Issues.Limit != 15 || loaded.Config.PRs.Limit != 15 {
+		t.Fatalf("defaults = %+v, %v, %v, want an empty inventory and limits 15", loaded.Config, repos, err)
+	}
+	if len(loaded.Report.LoadedFiles) != 0 {
+		t.Errorf("loaded files = %v, want none", loaded.Report.LoadedFiles)
+	}
+}
+
+func TestMissingExplicitPathErrors(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing.toml")
+
+	_, err := Load(path, flags(t))
+	if err == nil || !strings.Contains(err.Error(), path) {
+		t.Fatalf("Load(%q) error = %v, want the missing path", path, err)
+	}
+}
+
+func TestDirectoryAtDiscoveredPathErrors(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", root)
+	path := filepath.Join(root, "fleet", "config.toml")
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Load("", flags(t))
+	if err == nil || !strings.Contains(err.Error(), path) {
+		t.Fatalf("Load(\"\") error = %v, want the directory path", err)
+	}
+}
+
 func TestDiscoveryAndStrictValidation(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", root)
-	path := filepath.Join(root, "fleet", "fleet.toml")
-	if _, err := Load("", flags(t)); err == nil || !strings.Contains(err.Error(), path) {
-		t.Fatalf("missing default error = %v, want expected path", err)
-	}
+	path := filepath.Join(root, "fleet", "config.toml")
 	if err := os.Mkdir(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}

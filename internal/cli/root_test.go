@@ -12,8 +12,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// unloadableDiscoveredConfig points discovery at a file that cannot parse,
+// so any command that loads configuration fails with a "load config" error.
+func unloadableDiscoveredConfig(t *testing.T) {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "fleet")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("bad = [\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", filepath.Dir(dir))
+}
+
 func TestHelpAndVersionNeedNoSetup(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "missing"))
+	unloadableDiscoveredConfig(t)
 	t.Setenv("CODE_DIR", "")
 	t.Setenv("PATH", "")
 	for _, args := range [][]string{{"--help"}, {"--version"}, {"clone", "--help"}, {"sync", "--help"}, {"repos", "--help"}, {"json-reports"}, {"issues", "--help"}, {"prs", "--help"}, {"config", "--help"}, {"groups", "--help"}, {"completion", "bash"}} {
@@ -62,7 +76,7 @@ func TestEveryApplicationCommandHasWrappedLongHelp(t *testing.T) {
 }
 
 func TestUsageErrorsPrecedeConfigAndWork(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "missing"))
+	unloadableDiscoveredConfig(t)
 	t.Setenv("PATH", "")
 	for _, args := range [][]string{{"unknown"}, {"config", "extra"}, {"groups", "extra"}, {"exit-codes", "extra"}, {"json-reports", "extra"}, {"clone"}, {"clone", "--all", "one"}, {"clone", "--all", "--group", "empty"}, {"sync", "--unknown"}, {"repos", "--unknown"}, {"issues", "--state", "merged"}, {"prs", "--sort", "closed"}, {"issues", "--sort", "merged"}} {
 		out, _, err := execute(t, args...)

@@ -2,7 +2,10 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 
 	"github.com/jmcampanini/fleet/internal/inventory"
 	"github.com/jmcampanini/go-config-loader/configloader"
@@ -44,11 +47,14 @@ type Loaded struct {
 	Report    configloader.LoadReport
 }
 
-// Load applies defaults, one required file, environment, then root flags,
-// and validates the inventory before returning.
+// Load applies defaults, the configuration file, environment, then root
+// flags, and validates the inventory before returning. A path the caller
+// supplies must load. The discovered user-level file may be absent; when
+// something exists at that path it must load too.
 func Load(path string, flags *pflag.FlagSet) (Loaded, error) {
-	if path == "" {
-		helper, err := configloader.NewFileHelper("fleet", "fleet.toml")
+	discovered := path == ""
+	if discovered {
+		helper, err := configloader.NewFileHelper("fleet", "config.toml")
 		if err != nil {
 			return Loaded{}, err
 		}
@@ -59,9 +65,15 @@ func Load(path string, flags *pflag.FlagSet) (Loaded, error) {
 		path = paths[0]
 	}
 
-	fileLoader, err := configloader.NewRequiredFileLoader[Config](path)
+	var fileLoader configloader.ConfigLoader[Config]
+	var err error
+	if discovered && absent(path) {
+		fileLoader, err = configloader.NewPickLastFileLoader[Config]([]string{path})
+	} else {
+		fileLoader, err = configloader.NewRequiredFileLoader[Config](path)
+	}
 	if err != nil {
-		return Loaded{}, fmt.Errorf("load config %q; create this TOML file or use --config PATH: %w", path, err)
+		return Loaded{}, fmt.Errorf("load config %q: %w", path, err)
 	}
 	envLoader, err := configloader.NewEnvironmentLoader[Config]("fleet", configloader.OSEnv())
 	if err != nil {
@@ -88,4 +100,10 @@ func Load(path string, flags *pflag.FlagSet) (Loaded, error) {
 		return Loaded{}, err
 	}
 	return Loaded{Config: cfg, Inventory: inv, Report: report}, nil
+}
+
+// absent reports whether nothing exists at path.
+func absent(path string) bool {
+	_, err := os.Stat(path)
+	return errors.Is(err, fs.ErrNotExist)
 }

@@ -15,8 +15,8 @@ func newConfig() *cobra.Command {
 		Use: "config", Short: "Print effective TOML and optional field provenance",
 		Long: `Print redirectable TOML after applying all configuration layers and
 validating the inventory. --provenance adds field sources as TOML comments.
-The generated file is the source; individual Overlay layers cannot be
-recovered. This command performs no Git or GitHub operations.
+The generated file is the source; the Overlay layers that produced it
+cannot be recovered. This command performs no Git or GitHub operations.
 
 Example configuration:
   [issues]
@@ -32,12 +32,12 @@ Example configuration:
 Identities contain exactly server/org/repo without schemes or traversal.
 Unknown fields and unresolved group members fail. Empty repository tables
 use the remote default branch. Empty inventories are valid. Groups contain
-repository references, never other groups. Overlay owns additive profile
-composition; a later file can override branch and limit settings.
+repository references, never other groups. Overlay owns additive layer
+composition; a later layer can override branch and limit settings.
 
 ` + configHelp,
 		Example: `  fleet config
-  fleet config --config ./fleet.toml --issues-limit 30 --provenance`,
+  fleet config --config ./config.toml --issues-limit 30 --provenance`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			path, err := configPath(cmd)
