@@ -18,16 +18,9 @@ GOTOOLCHAIN = "local"
 [tasks.build]
 description = "Build build/fleet with git-derived version metadata."
 run = '''
-version="${VERSION:-$(git describe --tags --dirty --always 2>/dev/null || printf 'unknown')}"
+version="$(git describe --tags --dirty --always 2>/dev/null || printf 'unknown')"
 mkdir -p build
 go build -trimpath -buildvcs=false -ldflags "-X github.com/jmcampanini/fleet/internal/cli.Version=${version}" -o build/fleet .
-'''
-
-[tasks.install]
-description = "Install the CLI with git-derived version metadata."
-run = '''
-version="${VERSION:-$(git describe --tags --dirty --always 2>/dev/null || printf 'unknown')}"
-go install -trimpath -buildvcs=false -ldflags "-X github.com/jmcampanini/fleet/internal/cli.Version=${version}" .
 '''
 
 [tasks.test]
@@ -37,6 +30,10 @@ run = "go test -count=1 -race ./..."
 [tasks.lint]
 description = "Run static analysis."
 run = "golangci-lint run"
+
+[tasks.lint-fix]
+description = "Apply the fixes static analysis can make."
+run = "golangci-lint run --fix ./..."
 
 [tasks.lint-markdown]
 description = "Lint tracked Markdown using the shared Markdown rules."
@@ -62,7 +59,7 @@ run = "go mod tidy -diff"
 description = "Verify the built binary reports the injected version."
 depends = ["build"]
 run = '''
-version="${VERSION:-$(git describe --tags --dirty --always 2>/dev/null || printf 'unknown')}"
+version="$(git describe --tags --dirty --always 2>/dev/null || printf 'unknown')"
 case "$version" in
   unknown|n/a|"") echo "degenerate version identity: '$version'"; exit 1;;
 esac
@@ -77,7 +74,7 @@ fi
 description = "Check dependencies and reachable code for known vulnerabilities."
 run = "govulncheck ./..."
 
-# check is read-only: it must leave the tracked tree unchanged and create nothing outside ignored paths. CI fails if `git status --porcelain` reports anything after it. Add report-only tasks here; fixers (fmt, tidy) stay out.
+# check is read-only: it must leave the tracked tree unchanged and create nothing outside ignored paths. CI fails if `git status --porcelain` reports anything after it. Add report-only tasks here; fixers (fmt, tidy, lint-fix) stay out.
 [tasks.check]
 description = "Run the complete local verification contract."
 depends = ["fmt-check", "tidy-check", "lint", "lint-markdown", "test", "build", "version-check", "vuln"]
