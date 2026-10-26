@@ -66,7 +66,7 @@ mise run build
 | `fleet groups --group agents` | List the resolved repository members of a configured group. |
 | `fleet config --provenance` | Print the effective configuration with each field's source. |
 
-The canonical reference is `fleet --help`, each command's `--help`, and the help topics `fleet exit-codes` and `fleet json-reports`.
+The canonical reference is `fleet --help`, each command's `--help`, and the help topics `fleet help exit-codes` and `fleet help json-reports`.
 
 
 ## Required external programs

@@ -3,9 +3,7 @@ package cli
 import "github.com/spf13/cobra"
 
 func jsonReportsTopic() *cobra.Command {
-	return &cobra.Command{
-		Use: "json-reports", Short: "Fields and values of the --json reports", Args: cobra.NoArgs,
-		Long: `Every command that accepts --json writes one JSON object followed by a
+	return newHelpTopic("json-reports", "Fields and values of the --json reports", `Every command that accepts --json writes one JSON object followed by a
 newline to stdout. Configuration and selection errors leave stdout empty.
 Repository commands report after work finishes, including on failure.
 Field names are lowercase with underscores. Empty arrays are [], never
@@ -78,7 +76,5 @@ created_at, updated_at, closed_at, and merged_at. state is open, closed,
 or merged. state_reason is GitHub's issue state reason verbatim, such as
 COMPLETED or NOT_PLANNED, and is omitted for pull requests. closed_at and
 merged_at are event timestamps or null; merged_at is null for issues and
-unmerged pull requests.`,
-		RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
-	}
+unmerged pull requests.`)
 }

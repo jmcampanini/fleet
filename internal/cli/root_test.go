@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/jmcampanini/fleet/internal/checkoutreport"
 	"github.com/jmcampanini/fleet/internal/exitstatus"
@@ -38,41 +39,93 @@ func TestHelpAndVersionNeedNoSetup(t *testing.T) {
 	}
 }
 
-func TestExitCodesTopicPrintsSameHelpFromBothEntryPoints(t *testing.T) {
-	a, _, err := execute(t, "exit-codes")
+func TestExitCodesTopicListsEveryStatus(t *testing.T) {
+	out, _, err := execute(t, "exit-codes")
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, _, err := execute(t, "help", "exit-codes")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a != b || !strings.Contains(a, "0  Success") || !strings.Contains(a, "1  Failure after") || !strings.Contains(a, "2  Failure before") {
-		t.Errorf("exit code help differs or lacks status rows:\n%s\n%s", a, b)
+	for _, row := range []string{"0  Success", "1  Failure after", "2  Failure before"} {
+		if !strings.Contains(out, row) {
+			t.Errorf("exit-codes help lacks %q:\n%s", row, out)
+		}
 	}
 }
 
-func TestEveryApplicationCommandHasWrappedLongHelp(t *testing.T) {
+// applicationCommands returns every command the repository defines, depth
+// first from the root, skipping the help and completion subtrees cobra adds.
+func applicationCommands(t *testing.T) []*cobra.Command {
+	t.Helper()
+	var commands []*cobra.Command
 	var walk func(*cobra.Command)
 	walk = func(command *cobra.Command) {
-		if command.Name() == "help" || command.Name() == "completion" {
+		if command.HasParent() && (command.Name() == "help" || command.Name() == "completion") {
 			return
 		}
-		if command.Long == "" {
-			t.Errorf("%s lacks long help", command.CommandPath())
-		}
-		for _, text := range []string{command.Long, command.Example} {
-			for _, line := range strings.Split(text, "\n") {
-				if len(line) > 80 {
-					t.Errorf("%s line exceeds 80 columns: %q", command.CommandPath(), line)
-				}
-			}
-		}
+		commands = append(commands, command)
 		for _, child := range command.Commands() {
 			walk(child)
 		}
 	}
 	walk(NewRoot())
+	return commands
+}
+
+func TestEveryApplicationCommandDeclaresItsGrammar(t *testing.T) {
+	for _, command := range applicationCommands(t) {
+		if command.HasParent() && command.Args == nil {
+			t.Errorf("%s declares no Args", command.CommandPath())
+		}
+		if command.HasParent() && (command.HasSubCommands() || isHelpTopic(command)) && !command.Runnable() {
+			t.Errorf("%s is a command group or help topic but is not runnable", command.CommandPath())
+		}
+	}
+
+	root := NewRoot()
+	if root.Args != nil {
+		t.Error("root declares Args; an unset root rejects unknown commands during discovery")
+	}
+	if !root.DisableSuggestions {
+		t.Error("root does not set DisableSuggestions")
+	}
+	for _, name := range []string{"help", "version"} {
+		if root.Flags().Lookup(name) == nil {
+			t.Errorf("root lacks the --%s flag before execution", name)
+		}
+	}
+}
+
+func TestEveryApplicationCommandHasHelpWithin80Columns(t *testing.T) {
+	for _, command := range applicationCommands(t) {
+		t.Run(command.CommandPath(), func(t *testing.T) {
+			if command.Short == "" {
+				t.Error("lacks short help")
+			}
+			if command.Long == "" {
+				t.Error("lacks long help")
+			}
+
+			path := strings.Fields(command.CommandPath())[1:]
+			help, stderr, err := execute(t, append(path, "--help")...)
+			if err != nil || stderr != "" || help == "" {
+				t.Fatalf("--help = %q, %q, %v", help, stderr, err)
+			}
+			for _, line := range strings.Split(help, "\n") {
+				if width := utf8.RuneCountInString(line); width > 80 {
+					t.Errorf("help line has %d columns, want at most 80: %q", width, line)
+				}
+			}
+
+			if !isHelpTopic(command) {
+				return
+			}
+			for _, invocation := range [][]string{path, append([]string{"help"}, path...)} {
+				out, stderr, err := execute(t, invocation...)
+				if err != nil || stderr != "" || out != help {
+					t.Errorf("execute(%v) = %q, %q, %v, want the command's help", invocation, out, stderr, err)
+				}
+			}
+		})
+	}
 }
 
 func TestUsageErrorsPrecedeConfigAndWork(t *testing.T) {

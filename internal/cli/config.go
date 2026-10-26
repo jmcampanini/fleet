@@ -13,10 +13,37 @@ func newConfig() *cobra.Command {
 	var provenance bool
 	command := &cobra.Command{
 		Use: "config", Short: "Print effective TOML and optional field provenance",
-		Long: `Print redirectable TOML after applying all configuration layers and
-validating the inventory. --provenance adds field sources as TOML comments.
-The generated file is the source; the Overlay layers that produced it
-cannot be recovered. This command performs no Git or GitHub operations.
+		Long: `Print the effective configuration as TOML on stdout after applying every
+layer and validating the inventory, in a form --config can load again.
+--provenance adds each field's source as TOML comments. The generated file
+is the source; the Overlay layers that produced it cannot be recovered.
+Diagnostics go to stderr. This command never prompts, needs no terminal,
+and runs no Git or GitHub operations. Success exits 0; a configuration
+error exits 2 with empty stdout.
+
+Keys:
+  issues.limit
+    Maximum total issues across the selection; a positive integer.
+  prs.limit
+    Maximum total pull requests across the selection; a positive integer.
+  repos."server/org/repo"
+    One table per repository. The key is the repository identity:
+    exactly server/org/repo with no URL scheme. Each component uses
+    ASCII letters, digits, '.', '_', and '-' only, and is never . or ..;
+    the server starts with a letter or digit. An empty table is valid
+    and means the remote default branch.
+  repos."server/org/repo".branch
+    Optional branch override for clone and sync. Empty or absent means
+    the remote default branch. A nonempty value must be a valid Git
+    branch name.
+  groups.<name>
+    Array of repository references: repo, org/repo, or server/org/repo.
+    Short names must be unique across the inventory, and every member
+    must resolve to a configured repository. Groups hold repositories
+    only, never other groups. An empty array is valid. A group name is
+    nonempty and contains no comma, tab, line break, or NUL.
+
+Unknown keys fail the load. An empty inventory is valid.
 
 Example configuration:
   [issues]
@@ -28,12 +55,6 @@ Example configuration:
   [repos."github.com/example/helper"]
   [groups]
   tools = ["service", "helper"]
-
-Identities contain exactly server/org/repo without schemes or traversal.
-Unknown fields and unresolved group members fail. Empty repository tables
-use the remote default branch. Empty inventories are valid. Groups contain
-repository references, never other groups. Overlay owns additive layer
-composition; a later layer can override branch and limit settings.
 
 ` + configHelp,
 		Example: `  fleet config

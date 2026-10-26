@@ -15,12 +15,12 @@ import (
 
 // Issues holds the total issue limit.
 type Issues struct {
-	Limit int `toml:"limit" config:"issues-limit" help:"Maximum total issues across selected repositories"`
+	Limit int `toml:"limit" config:"issues-limit" help:"Maximum total issues across the selection"`
 }
 
 // PRs holds the total pull request limit.
 type PRs struct {
-	Limit int `toml:"limit" config:"prs-limit" help:"Maximum total pull requests across selected repositories"`
+	Limit int `toml:"limit" config:"prs-limit" help:"Maximum total pull requests across the selection"`
 }
 
 // Repo holds the optional settings of one configured repository.
