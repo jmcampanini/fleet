@@ -98,6 +98,20 @@ func TestMissingExplicitPathErrors(t *testing.T) {
 	}
 }
 
+func TestDirectoryAtDiscoveredPathErrors(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", root)
+	path := filepath.Join(root, "fleet", "config.toml")
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Load("", flags(t))
+	if err == nil || !strings.Contains(err.Error(), path) {
+		t.Fatalf("Load(\"\") error = %v, want the directory path", err)
+	}
+}
+
 func TestDiscoveryAndStrictValidation(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", root)

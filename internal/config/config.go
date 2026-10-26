@@ -2,7 +2,10 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 
 	"github.com/jmcampanini/fleet/internal/inventory"
 	"github.com/jmcampanini/go-config-loader/configloader"
@@ -46,10 +49,11 @@ type Loaded struct {
 
 // Load applies defaults, the configuration file, environment, then root
 // flags, and validates the inventory before returning. A path the caller
-// supplies must load; the discovered user-level file may be absent.
+// supplies must load. The discovered user-level file may be absent; when
+// something exists at that path it must load too.
 func Load(path string, flags *pflag.FlagSet) (Loaded, error) {
-	explicit := path != ""
-	if !explicit {
+	discovered := path == ""
+	if discovered {
 		helper, err := configloader.NewFileHelper("fleet", "config.toml")
 		if err != nil {
 			return Loaded{}, err
@@ -63,10 +67,10 @@ func Load(path string, flags *pflag.FlagSet) (Loaded, error) {
 
 	var fileLoader configloader.ConfigLoader[Config]
 	var err error
-	if explicit {
-		fileLoader, err = configloader.NewRequiredFileLoader[Config](path)
-	} else {
+	if discovered && absent(path) {
 		fileLoader, err = configloader.NewPickLastFileLoader[Config]([]string{path})
+	} else {
+		fileLoader, err = configloader.NewRequiredFileLoader[Config](path)
 	}
 	if err != nil {
 		return Loaded{}, fmt.Errorf("load config %q: %w", path, err)
@@ -96,4 +100,10 @@ func Load(path string, flags *pflag.FlagSet) (Loaded, error) {
 		return Loaded{}, err
 	}
 	return Loaded{Config: cfg, Inventory: inv, Report: report}, nil
+}
+
+// absent reports whether nothing exists at path.
+func absent(path string) bool {
+	_, err := os.Stat(path)
+	return errors.Is(err, fs.ErrNotExist)
 }
