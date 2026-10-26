@@ -16,7 +16,7 @@ func TestRunCheckoutAlignsRowsBeforeTheNextStep(t *testing.T) {
 	if err := os.MkdirAll(configDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(configDir, "fleet.toml"), []byte("[repos.\"github.com/a/one\"]\n[repos.\"github.com/a/two-longer\"]\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(configDir, "config.toml"), []byte("[repos.\"github.com/a/one\"]\n[repos.\"github.com/a/two-longer\"]\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("XDG_CONFIG_HOME", filepath.Dir(configDir))

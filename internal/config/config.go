@@ -44,11 +44,13 @@ type Loaded struct {
 	Report    configloader.LoadReport
 }
 
-// Load applies defaults, one required file, environment, then root flags,
-// and validates the inventory before returning.
+// Load applies defaults, the configuration file, environment, then root
+// flags, and validates the inventory before returning. A path the caller
+// supplies must load; the discovered user-level file may be absent.
 func Load(path string, flags *pflag.FlagSet) (Loaded, error) {
-	if path == "" {
-		helper, err := configloader.NewFileHelper("fleet", "fleet.toml")
+	explicit := path != ""
+	if !explicit {
+		helper, err := configloader.NewFileHelper("fleet", "config.toml")
 		if err != nil {
 			return Loaded{}, err
 		}
@@ -59,9 +61,15 @@ func Load(path string, flags *pflag.FlagSet) (Loaded, error) {
 		path = paths[0]
 	}
 
-	fileLoader, err := configloader.NewRequiredFileLoader[Config](path)
+	var fileLoader configloader.ConfigLoader[Config]
+	var err error
+	if explicit {
+		fileLoader, err = configloader.NewRequiredFileLoader[Config](path)
+	} else {
+		fileLoader, err = configloader.NewPickLastFileLoader[Config]([]string{path})
+	}
 	if err != nil {
-		return Loaded{}, fmt.Errorf("load config %q; create this TOML file or use --config PATH: %w", path, err)
+		return Loaded{}, fmt.Errorf("load config %q: %w", path, err)
 	}
 	envLoader, err := configloader.NewEnvironmentLoader[Config]("fleet", configloader.OSEnv())
 	if err != nil {

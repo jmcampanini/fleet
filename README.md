@@ -77,7 +77,7 @@ The canonical reference is `fleet --help`, each command's `--help`, and the help
 
 ## Configuration
 
-Fleet reads `$XDG_CONFIG_HOME/fleet/fleet.toml`, or `~/.config/fleet/fleet.toml` when `XDG_CONFIG_HOME` is empty. A minimal file:
+Fleet reads `$XDG_CONFIG_HOME/fleet/config.toml`, or `~/.config/fleet/config.toml` when `XDG_CONFIG_HOME` is empty. A minimal file:
 
 ```toml
 [repos."github.com/jmcampanini/gibson"]
