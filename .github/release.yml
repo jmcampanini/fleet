@@ -1,0 +1,8 @@
+# Shapes the release notes GitHub generates for each release.
+changelog:
+  exclude:
+    labels:
+      - dependencies
+    authors:
+      - dependabot
+      - dependabot[bot]
