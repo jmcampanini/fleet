@@ -25,8 +25,6 @@ stdout preserves one parseable report on partial failure. Completed
 changes remain in place after errors or cancellation; cancellation takes
 the status of the phase it interrupted. Dry-run success means inspection
 completed; unresolved history still needs checking during sync.
-'fleet help <unknown>' prints an unknown-topic line and the root usage on
-stderr, leaves stdout empty, and exits 0. 'fleet completion <unknown>'
-prints the completion help on stdout and exits 0; an operand after a shell
-name exits 2.`)
+'fleet help <unknown>' and 'fleet completion <unknown>' are usage errors
+and exit 2.`)
 }

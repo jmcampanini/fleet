@@ -92,10 +92,16 @@ func (c Cursor) position(repo string) *Key {
 }
 
 // next advances every repository read in report past its last returned
-// item. A failed repository stays where c had it, so its items return on
-// the next page without repeating the other repositories' items.
-func (c Cursor) next(repos []inventory.Repository, report Report) Cursor {
+// item, and past its own copies of returned URLs, which deduplication kept
+// under another repository. A failed repository stays where c had it, so
+// its items return on the next page without repeating the other
+// repositories' items.
+func (c Cursor) next(repos []inventory.Repository, report Report, candidates [][]Item) Cursor {
 	var last *Key
+	returned := make(map[string]bool, len(report.Items))
+	for _, item := range report.Items {
+		returned[item.URL] = true
+	}
 	if len(report.Items) > 0 {
 		key := report.Items[len(report.Items)-1].key(report.Query.Sort)
 		last = &key
@@ -105,6 +111,12 @@ func (c Cursor) next(repos []inventory.Repository, report Report) Cursor {
 		position := c.position(repo.ID)
 		if report.Repositories[index].Complete {
 			position = later(position, last, report.Query.Order)
+			for _, item := range candidates[index] {
+				if returned[item.URL] {
+					key := item.key(report.Query.Sort)
+					position = later(position, &key, report.Query.Order)
+				}
+			}
 		}
 		if !sameKey(position, next.After, report.Query.Order) {
 			if next.Repositories == nil {

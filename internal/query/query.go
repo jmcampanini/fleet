@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -155,9 +156,9 @@ type Client struct {
 
 // List validates the options, queries each repository independently from
 // its position in cursor, and aggregates in inventory order. A failed
-// repository contributes no items, so nextCursor resumes it from where this
-// page started it. Invalid options produce an incomplete report that carries
-// the validation error on every repository.
+// repository keeps the items gathered before its failure, and nextCursor
+// resumes it from where this page started it. Invalid options produce an
+// incomplete report that carries the validation error on every repository.
 func (c Client) List(ctx context.Context, repos []inventory.Repository, options Options, cursor Cursor) Report {
 	report := Report{Query: options, Complete: true, Items: []Item{}, Repositories: make([]RepositoryResult, len(repos))}
 	if err := options.Validate(); err != nil {
@@ -171,8 +172,9 @@ func (c Client) List(ctx context.Context, repos []inventory.Repository, options 
 	report.Query = options
 
 	// Retrieving one item past the limit proves whether more items exist.
+	// A limit of math.MaxInt already covers every item.
 	retrieval := options
-	if !options.All {
+	if !options.All && options.Limit < math.MaxInt {
 		retrieval.Limit++
 	}
 	candidates := make([][]Item, len(repos))
@@ -203,13 +205,13 @@ func (c Client) List(ctx context.Context, repos []inventory.Repository, options 
 		report.Items = report.Items[:options.Limit]
 	}
 	if report.HasMore || !report.Complete {
-		report.NextCursor = cursor.next(repos, report).encode(options, repos)
+		report.NextCursor = cursor.next(repos, report, candidates).encode(options, repos)
 	}
 	return report
 }
 
-// listRepository returns the repository's best items after position, or no
-// items and an error when it cannot prove them.
+// listRepository returns the repository's best items after position. On an
+// error it also returns the candidates gathered before the failure.
 func (c Client) listRepository(ctx context.Context, id string, options Options, position *Key) ([]Item, error) {
 	resource := "issue"
 	fields := "number,title,url,state,stateReason,createdAt,updatedAt,closedAt"
@@ -222,11 +224,14 @@ func (c Client) listRepository(ctx context.Context, id string, options Options, 
 	}
 	// Ordinary GraphQL listing serves only created descending. Every other
 	// retrieval order goes through gh search, which stops at candidateCap.
+	// Listing past the cap is needed under --all and to reach a cursor's
+	// position, since the items before it count toward the prefix.
 	search := retrievalSort != SortCreated || retrievalOrder != OrderDesc
-	capped := search || !options.All
+	capped := search || (!options.All && position == nil)
+	var candidates []Item
 	// gh list exposes a total limit, not a cursor. Expand the ordered prefix
-	// by 100 until the bound proves completeness, or double it under --all
-	// until the repository is exhausted, stopping at the cap where one applies.
+	// by 100 until the bound proves completeness, or double it when the
+	// prefix may run long, stopping at the cap where one applies.
 	for limit := 100; ; {
 		args := []string{resource, "list", "--repo", id, "--state", string(options.State), "--limit", strconv.Itoa(limit), "--json", fields}
 		if search {
@@ -235,16 +240,16 @@ func (c Client) listRepository(ctx context.Context, id string, options Options, 
 		body, err := c.Run(ctx, "", "gh", args...)
 		if err != nil {
 			host, _, _ := strings.Cut(id, "/")
-			return nil, fmt.Errorf("query %q on host %q with gh: %w", id, host, err)
+			return candidates, fmt.Errorf("query %q on host %q with gh: %w", id, host, err)
 		}
 		page, err := decode(body, id, options)
 		if err != nil {
-			return nil, err
+			return candidates, err
 		}
 		for index := 1; index < len(page); index++ {
 			comparison := page[index-1].Timestamp(retrievalSort).Compare(page[index].Timestamp(retrievalSort))
 			if (retrievalOrder == OrderDesc && comparison < 0) || (retrievalOrder == OrderAsc && comparison > 0) {
-				return nil, fmt.Errorf("query %q returned items outside the requested retrieval order; cannot prove completeness", id)
+				return candidates, fmt.Errorf("query %q returned items outside the requested retrieval order; cannot prove completeness", id)
 			}
 		}
 		var last Item
@@ -257,7 +262,7 @@ func (c Client) listRepository(ctx context.Context, id string, options Options, 
 				remaining = append(remaining, item)
 			}
 		}
-		candidates := best(remaining, options)
+		candidates = best(remaining, options)
 		if len(page) < limit {
 			return candidates, nil
 		}
@@ -267,7 +272,7 @@ func (c Client) listRepository(ctx context.Context, id string, options Options, 
 		if capped && limit >= candidateCap {
 			break
 		}
-		if options.All {
+		if options.All || position != nil {
 			limit *= 2
 		} else {
 			limit += 100
@@ -276,10 +281,13 @@ func (c Client) listRepository(ctx context.Context, id string, options Options, 
 			limit = min(limit, candidateCap)
 		}
 	}
-	if options.All {
-		return nil, errors.New("incomplete: reached gh search's 1000-candidate cap before exhausting the repository; --all is uncapped only for created descending order")
+	switch {
+	case options.All:
+		return candidates, errors.New("incomplete: reached gh search's 1000-candidate cap before exhausting the repository; --all is uncapped only for created descending order")
+	case position != nil:
+		return candidates, errors.New("incomplete: the cursor lies past the 1000 candidates gh search returns for this order; query directly with gh")
 	}
-	return nil, errors.New("incomplete: reached the 1000-candidate cap before proving the requested ordering; reduce the limit or query directly with gh")
+	return candidates, errors.New("incomplete: reached the 1000-candidate cap before proving the requested ordering; reduce the limit or query directly with gh")
 }
 
 // bounded reports whether the unseen items, which follow last in retrieval

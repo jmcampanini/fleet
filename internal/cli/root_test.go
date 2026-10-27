@@ -138,7 +138,8 @@ func TestUsageErrorsPrecedeConfigAndWork(t *testing.T) {
 	t.Setenv("PATH", "")
 	for _, args := range [][]string{{"unknown"}, {"config", "extra"}, {"groups", "extra"}, {"exit-codes", "extra"}, {"json-reports", "extra"}, {"clone"}, {"clone", "--all", "one"}, {"clone", "--all", "--group", "empty"}, {"sync", "--unknown"}, {"repos", "--unknown"}, {"issues", "--state", "merged"}, {"prs", "--sort", "closed"}, {"issues", "--sort", "merged"},
 		{"issues", "--json", "--csv"}, {"prs", "--jsonl", "--json"}, {"issues", "--limit", "5", "--all"}, {"issues", "--limit", "0"}, {"prs", "--issues-limit", "5"},
-		{"issues", "--overwrite"}, {"issues", "--output-file", "out.txt"}, {"issues", "--output-file", "", "--json"}, {"prs", "--no-header"}, {"repos", "--csv"}} {
+		{"issues", "--overwrite"}, {"issues", "--output-file", "out.txt"}, {"issues", "--output-file", "", "--json"}, {"prs", "--no-header"}, {"repos", "--csv"},
+		{"help", "unknown"}, {"help", "issues", "extra"}, {"completion", "unknown"}, {"completion", "bash", "extra"}} {
 		out, _, err := execute(t, args...)
 		if err == nil || out != "" || strings.Contains(err.Error(), "load config") || exitstatus.ExitCode(err) != exitstatus.ExitPreflight {
 			t.Errorf("execute(%v) = %q, %v (exit %d), want a preflight error", args, out, err, exitstatus.ExitCode(err))

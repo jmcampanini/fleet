@@ -37,8 +37,7 @@ const outputHelp = `Output and dependencies:
   first, changes and plans next, and unchanged repositories last.
   --json instead emits one JSON report after all work, including failures
   and completed actions. Success exits 0.
-  Partial or incomplete results exit 1 after the report is written; issues
-  and prs then write no JSONL or CSV records and no --output-file file.
+  Partial or incomplete results exit 1 after the report is written.
   Preflight errors exit 2 and leave stdout empty.
   Commands never prompt, read credentials from stdin, or need an interactive
   terminal. Git and gh must already be authenticated. Each subprocess has a
@@ -48,6 +47,7 @@ const outputHelp = `Output and dependencies:
   See 'fleet help exit-codes' for exit status and 'fleet help json-reports'
   for the fields of every --json report and the JSONL and CSV records.`
 
+// dataHelp is a format string; %[1]s is the command's resource.
 const dataHelp = `Formats:
   Output is a human-readable list by default, on a terminal and through a
   pipe alike. --json writes one JSON report object. --jsonl writes one JSON
@@ -60,7 +60,7 @@ const dataHelp = `Formats:
 
 Limits and cursors:
   --limit N returns at most N items across the selection. It defaults to
-  issues.limit or prs.limit, which is 15 unless configured. --all returns
+  %[1]s.limit, which is 15 unless configured. --all returns
   every matching item and cannot combine with --limit. When the limit cuts
   the result while more items match, the JSON report sets hasMore and
   nextCursor; human, JSONL, and CSV output print the cursor on stderr. The
@@ -71,11 +71,12 @@ Limits and cursors:
 
 Failed reads:
   Each repository that cannot be read prints '<repository> error: <message>'
-  on stderr, and the command exits 1. The failed repositories contribute no
-  items. Human output lists the other repositories' items and prints
+  on stderr, and the command exits 1. Human output lists the items read,
+  including those a failed repository returned before failing, and prints
   PARTIAL RESULTS on stderr. The JSON report sets complete to false and
-  nextCursor, which returns the failed repositories' items without
-  repeating the others'. JSONL and CSV output write no records.
+  nextCursor, which reads the failed repositories again from where this
+  run started them, without repeating the other repositories' items.
+  JSONL and CSV output write no records.
 
 Output file:
   --output-file PATH writes the payload to PATH instead of stdout and
@@ -101,12 +102,13 @@ Retrieval:
   Enterprise are supported; other hosts fail explicitly. No CODE_DIR or
   local checkout is needed. Created descending uses ordinary GraphQL
   listing; other retrieval orders use gh list's GraphQL search path.
-  Expand 100-item prefixes up to 1000 candidates per repository, counting
-  the items a --cursor skips. For newest closure or merge ordering,
-  updatedAt bounds unseen event times. Continue through ties. Oldest event
-  ordering requires exhausting the candidates. --all doubles the prefix
-  until the repository is exhausted; only GraphQL listing passes 1000.
-  Reaching the cap without proving completeness, or under --all, is a
-  failed read of that repository. Failed repositories do not stop other
+  Expand 100-item prefixes up to 1000 candidates per repository. For newest
+  closure or merge ordering, updatedAt bounds unseen event times. Continue
+  through ties. Oldest event ordering requires exhausting the candidates.
+  Under --all or --cursor, GraphQL listing doubles the prefix past 1000
+  until it proves the items or exhausts the repository. The search path
+  stops at 1000, counting the items a --cursor skips. Reaching the cap
+  without proving completeness, or under --all, is a failed read of that
+  repository. Failed repositories do not stop other
   queries. Partial output does not claim to be the newest or oldest across
   the selection.`

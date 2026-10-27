@@ -71,7 +71,7 @@ Issue and PR report:
   complete           Every repository was read and established enough
                      candidates for the requested global ordering. false
                      marks a failed read: the failed repositories' items
-                     are missing, and the report is not the newest or
+                     may be missing, and the report is not the newest or
                      oldest across the selection. A limit cut leaves it
                      true.
   hasMore            true when the limit cut the items while more match.
@@ -86,7 +86,8 @@ Items:
   CSV column order. Fleet reads them from gh issue list --json or gh pr
   list --json, whose fields follow GitHub's GraphQL Issue and PullRequest
   objects. number, title, and url pass through unchanged; Fleet renames
-  the camelCase timestamps, lowercases state, and adds repository.
+  stateReason and the camelCase timestamps, lowercases state, and adds
+  repository.
   repository         String: Fleet's server/org/repo identity.
   number             Integer: gh number.
   title              String: gh title.

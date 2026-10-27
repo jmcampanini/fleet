@@ -233,3 +233,48 @@ func TestCursorFromAnotherQueryIsAPreflightError(t *testing.T) {
 		t.Errorf("issues --cursor e30 = %q, %v, want a preflight error", out, err)
 	}
 }
+
+func TestLimitPrecedence(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "fleet.toml")
+	if err := os.WriteFile(path, []byte("[issues]\nlimit = 20\n[prs]\nlimit = 21\n[groups]\nempty = []\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FLEET_ISSUES_LIMIT", "25")
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"issues"}, "limit=25"},
+		{[]string{"issues", "--limit", "30"}, "limit=30"},
+		{[]string{"issues", "--all"}, "limit=all"},
+		{[]string{"prs"}, "limit=21"},
+	} {
+		out, _, err := execute(t, append(tc.args, "--config", path, "--group", "empty")...)
+		if err != nil || !strings.Contains(out, " "+tc.want+" ") {
+			t.Errorf("execute(%v) = %q, %v, want %s", tc.args, out, err, tc.want)
+		}
+	}
+}
+
+// failingWriter rejects every write.
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("closed") }
+
+func TestFailedDiagnosticLeavesOutputFileUnchanged(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "issues.csv")
+	if err := os.WriteFile(file, []byte("earlier"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	report := queryReport()
+	report.HasMore, report.NextCursor = true, "CURSOR"
+	command := &cobra.Command{}
+	command.SetErr(failingWriter{})
+
+	err := writeQuery(command, report, dataOutput{csv: true, file: file, overwrite: true})
+
+	body, readErr := os.ReadFile(file)
+	if exitstatus.ExitCode(err) != exitstatus.ExitWork || readErr != nil || string(body) != "earlier" {
+		t.Errorf("writeQuery with a failing stderr = %v, file %q, %v, want a work failure and the file unchanged", err, body, readErr)
+	}
+}

@@ -56,7 +56,7 @@ var csvColumns = []string{"repository", "number", "title", "url", "state", "stat
 func newQuery(spec querySpec, flags *queryFlags) *cobra.Command {
 	return &cobra.Command{
 		Use: string(spec.resource) + " [repository ...]", Short: spec.short,
-		Long:    spec.long + "\n\n" + dataHelp + "\n\n" + queryHelp + "\n\n" + selectionHelp + "\n\n" + configHelp + "\n\n" + outputHelp,
+		Long:    spec.long + "\n\n" + fmt.Sprintf(dataHelp, spec.resource) + "\n\n" + queryHelp + "\n\n" + selectionHelp + "\n\n" + configHelp + "\n\n" + outputHelp,
 		Example: spec.example,
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, refs []string) error {
@@ -97,10 +97,11 @@ func newQuery(spec querySpec, flags *queryFlags) *cobra.Command {
 	}
 }
 
-// writeQuery writes the payload, then the diagnostics on stderr, and
+// writeQuery writes the diagnostics on stderr, then the payload, and
 // returns the failure an incomplete read causes. Records and files receive
 // only a complete read: JSONL and CSV cannot say they are incomplete, and a
-// file the caller names never holds a failed run's output.
+// file the caller names never holds a failed run's output. The payload goes
+// last so a failed diagnostic cannot follow a replaced file.
 func writeQuery(cmd *cobra.Command, report query.Report, output dataOutput) error {
 	var payload bytes.Buffer
 	var err error
@@ -113,9 +114,6 @@ func writeQuery(cmd *cobra.Command, report query.Report, output dataOutput) erro
 		err = writeCSV(&payload, report.Items, !output.noHeader)
 	default:
 		err = writeHuman(&payload, report)
-	}
-	if err == nil && (report.Complete || (output.file == "" && !output.records())) {
-		err = output.write(cmd, payload.Bytes())
 	}
 	if err != nil {
 		return exitstatus.WorkError{Err: err}
@@ -136,11 +134,18 @@ func writeQuery(cmd *cobra.Command, report query.Report, output dataOutput) erro
 	if human && !report.Complete {
 		notes = append(notes, "PARTIAL RESULTS: ordering across the full selection is not established.")
 	}
-	if report.HasMore && !output.json && (report.Complete || human) {
+	// After a failed read the final fleet: line names the cursor instead.
+	if report.HasMore && report.Complete && !output.json {
 		notes = append(notes, fmt.Sprintf("More %s exist; continue with --cursor %s", report.Query.Resource, report.NextCursor))
 	}
 	for _, note := range notes {
 		if _, err := fmt.Fprintln(stderr, note); err != nil {
+			return exitstatus.WorkError{Err: err}
+		}
+	}
+
+	if report.Complete || (output.file == "" && !output.records()) {
+		if err := output.write(cmd, payload.Bytes()); err != nil {
 			return exitstatus.WorkError{Err: err}
 		}
 	}
@@ -155,9 +160,9 @@ func writeQuery(cmd *cobra.Command, report query.Report, output dataOutput) erro
 	case output.records():
 		message += "; wrote no records"
 	case output.json:
-		message += "; the report's nextCursor resumes them"
+		message += "; the report's nextCursor retries them"
 	default:
-		message += "; --cursor " + report.NextCursor + " resumes them"
+		message += "; --cursor " + report.NextCursor + " retries them"
 	}
 	return exitstatus.WorkError{Err: errors.New(message)}
 }

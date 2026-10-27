@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -117,7 +118,7 @@ func TestCapAndQueryFailureRemainPartial(t *testing.T) {
 		return payload(t, rows), nil
 	}}
 	report := client.List(t.Context(), []inventory.Repository{{ID: "github.com/a/b"}, {ID: "github.com/fail/repo"}}, Options{Resource: ResourceIssues, State: StateClosed, Sort: SortClosed, Order: OrderDesc, Limit: 2}, Cursor{})
-	if report.Complete || len(report.Items) != 0 || report.NextCursor == "" || calls.Load() != 11 || !errorContains(report.Repositories[0].Err, "cap") || !errorContains(report.Repositories[1].Err, "authentication failed") {
+	if report.Complete || len(report.Items) != 2 || report.NextCursor == "" || calls.Load() != 11 || !errorContains(report.Repositories[0].Err, "cap") || !errorContains(report.Repositories[1].Err, "authentication failed") {
 		t.Fatalf("List() = %+v, calls=%d", report, calls.Load())
 	}
 }
@@ -354,7 +355,7 @@ func TestAllPagesPastTheCapOnlyForGraphQLListing(t *testing.T) {
 		return payload(t, rows[:limit]), nil
 	}}
 	capped := search.List(t.Context(), []inventory.Repository{repo}, Options{Resource: ResourceIssues, State: StateOpen, Sort: SortUpdated, Order: OrderDesc, All: true}, Cursor{})
-	if capped.Complete || len(capped.Items) != 0 || capped.NextCursor == "" || !errorContains(capped.Repositories[0].Err, "cap") || calls != 5 {
+	if capped.Complete || len(capped.Items) != candidateCap || capped.NextCursor == "" || !errorContains(capped.Repositories[0].Err, "cap") || calls != 5 {
 		t.Errorf("List(--all, search) = %+v after %d calls, want a failed read at the cap", capped, calls)
 	}
 }
@@ -387,4 +388,64 @@ func TestParseCursorRejectsForeignAndMalformedValues(t *testing.T) {
 
 func second[T any](_ T, err error) error {
 	return err
+}
+
+func TestCursorSkipsURLsKeptUnderAnotherIdentity(t *testing.T) {
+	// Two configured identities that resolve to one GitHub repository return
+	// the same URLs; deduplication keeps the copy under the first identity.
+	repos := []inventory.Repository{{ID: "github.com/A/repo"}, {ID: "github.com/a/repo"}}
+	rows := createdRows("github.com/a/repo", 3, 20)
+	source := &listing{rows: map[string][]map[string]any{repos[0].ID: rows, repos[1].ID: rows}}
+	client := Client{Run: source.run(t)}
+	options := Options{Resource: ResourceIssues, State: StateOpen, Order: OrderDesc, Limit: 1}
+	if err := options.Validate(); err != nil {
+		t.Fatal(err)
+	}
+
+	var seen []string
+	cursor := Cursor{}
+	for page := 1; page <= 5; page++ {
+		report := client.List(t.Context(), repos, options, cursor)
+		seen = append(seen, urls(report.Items)...)
+		if !report.HasMore {
+			break
+		}
+		var err error
+		if cursor, err = ParseCursor(report.NextCursor, options, repos); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	want := []string{"https://github.com/a/repo/issues/1", "https://github.com/a/repo/issues/2", "https://github.com/a/repo/issues/3"}
+	if strings.Join(seen, " ") != strings.Join(want, " ") {
+		t.Errorf("pages returned %v, want %v", seen, want)
+	}
+}
+
+func TestCursorPassesTheCapOnGraphQLListing(t *testing.T) {
+	repo := inventory.Repository{ID: "github.com/a/one"}
+	rows := createdRows(repo.ID, 1200, 2000)
+	source := &listing{rows: map[string][]map[string]any{repo.ID: rows}}
+	stamp, err := time.Parse(time.RFC3339, rows[994]["createdAt"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cursor := Cursor{After: &Key{Time: stamp, Repository: repo.ID, Number: 995}}
+
+	report := Client{Run: source.run(t)}.List(t.Context(), []inventory.Repository{repo}, Options{Resource: ResourceIssues, State: StateOpen, Sort: SortCreated, Order: OrderDesc, Limit: 10}, cursor)
+
+	if !report.Complete || !report.HasMore || len(report.Items) != 10 || report.Items[0].Number != 996 {
+		t.Errorf("List(--cursor past 1000) = complete %t, hasMore %t, %d items, want items 996-1005", report.Complete, report.HasMore, len(report.Items))
+	}
+}
+
+func TestMaximumLimitReturnsEveryItem(t *testing.T) {
+	repo := inventory.Repository{ID: "github.com/a/one"}
+	source := &listing{rows: map[string][]map[string]any{repo.ID: createdRows(repo.ID, 3, 20)}}
+
+	report := Client{Run: source.run(t)}.List(t.Context(), []inventory.Repository{repo}, Options{Resource: ResourceIssues, State: StateOpen, Order: OrderDesc, Limit: math.MaxInt}, Cursor{})
+
+	if !report.Complete || report.HasMore || len(report.Items) != 3 {
+		t.Errorf("List(math.MaxInt) = %+v, want three items and no more", report)
+	}
 }
