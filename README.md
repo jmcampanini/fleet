@@ -61,8 +61,9 @@ mise run build
 | `fleet sync gibson molly --dry-run` | Show what sync would do to two repositories without changing them. |
 | `fleet repos --json` | Describe every configured repository with its path, groups, and GitHub topics. |
 | `fleet repos --no-topics` | List the inventory from the TOML file without contacting GitHub. |
-| `fleet issues --issues-limit 30` | List the 30 newest open issues across the inventory. |
+| `fleet issues --limit 30` | List the 30 newest open issues across the inventory. |
 | `fleet prs --state merged --json` | Emit the most recently merged pull requests as one JSON report. |
+| `fleet prs --state merged --all --csv --output-file merged.csv` | Save every merged pull request to a new CSV file. |
 | `fleet groups --group agents` | List the resolved repository members of a configured group. |
 | `fleet config --provenance` | Print the effective configuration with each field's source. |
 

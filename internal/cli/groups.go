@@ -51,7 +51,7 @@ terminal, or network.
 			if err != nil {
 				return err
 			}
-			loaded, err := config.Load(path, cmd.Root().PersistentFlags())
+			loaded, err := config.Load(path)
 			if err != nil {
 				return err
 			}

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -29,10 +28,11 @@ Topics:
   Ask authenticated gh for each repository's topics on its host, with at
   most four repositories in flight. GitHub.com and GitHub Enterprise are
   supported; other hosts fail explicitly. Topics are sorted. A repository
-  whose topics cannot be retrieved reports an error naming --no-topics,
-  keeps an empty topic list, and does not stop the others; the report is
-  then partial and the command exits 1. --no-topics skips GitHub entirely
-  and reports from TOML alone, with topics_fetched false in the report.
+  whose topics cannot be retrieved keeps an empty topic list, prints
+  '<repository> error: <message>' on stderr, and does not stop the others;
+  the report is then partial and the command exits 1. --no-topics skips
+  GitHub entirely and reports from TOML alone, with topics_fetched false in
+  the report.
 
 Paths:
   The path is $CODE_DIR/server/org/repo whether or not a checkout exists.
@@ -62,8 +62,17 @@ Paths:
 			if err := renderRepos(cmd, report, jsonOutput); err != nil {
 				return exitstatus.WorkError{Err: err}
 			}
-			if !report.Complete {
-				return exitstatus.WorkError{Err: errors.New("one or more repositories failed; see the report or pass --no-topics")}
+			failed := 0
+			for _, entry := range report.Results {
+				if entry.Err != nil {
+					failed++
+					if err := writeRepositoryError(cmd.ErrOrStderr(), entry.Repository, entry.Err); err != nil {
+						return exitstatus.WorkError{Err: err}
+					}
+				}
+			}
+			if failed > 0 {
+				return exitstatus.WorkError{Err: fmt.Errorf("topic retrieval failed for %d of %d repositories; pass --no-topics to list without contacting GitHub", failed, len(report.Results))}
 			}
 			return nil
 		},
@@ -83,8 +92,8 @@ func renderRepos(cmd *cobra.Command, report repos.Report, jsonOutput bool) error
 	rows := make([][]string, 0, len(report.Results))
 	failed := 0
 	for _, entry := range report.Results {
-		rows = append(rows, []string{entry.Repository, "branch=" + orDefault(entry.Branch, "default"), "groups=" + orDefault(strings.Join(entry.Groups, ","), "-"), "topics=" + orDefault(strings.Join(entry.Topics, ","), "-"), textformat.FirstLine(entry.Error)})
-		if entry.Error != "" {
+		rows = append(rows, []string{entry.Repository, "branch=" + orDefault(entry.Branch, "default"), "groups=" + orDefault(strings.Join(entry.Groups, ","), "-"), "topics=" + orDefault(strings.Join(entry.Topics, ","), "-")})
+		if entry.Err != nil {
 			failed++
 		}
 	}

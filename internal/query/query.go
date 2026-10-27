@@ -4,6 +4,7 @@ package query
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -55,17 +56,22 @@ const (
 	OrderDesc Order = "desc"
 )
 
-// Options specifies a resource query and global result limit.
+// Options specifies a resource query and its global result limit. Limit is
+// the maximum number of items to return; All lifts it, and Limit is then 0.
 type Options struct {
 	Resource Resource `json:"resource"`
 	State    State    `json:"state"`
 	Sort     Sort     `json:"sort"`
 	Order    Order    `json:"order"`
 	Limit    int      `json:"limit"`
+	All      bool     `json:"all"`
 }
 
+// candidateCap bounds the candidates gh search returns for one repository.
+const candidateCap = 1000
+
 // Validate fills the state-dependent default sort and rejects invalid
-// controls. The limit is not a control; configuration validates it.
+// controls. Limit and All are not controls; the command validates them.
 func (o *Options) Validate() error {
 	if o.Resource != ResourceIssues && o.Resource != ResourcePRs {
 		return fmt.Errorf("unknown resource %q", o.Resource)
@@ -121,17 +127,23 @@ func (i Item) Timestamp(sort Sort) time.Time {
 	return time.Time{}
 }
 
-// RepositoryResult records query completeness separately from returned items.
+// RepositoryResult records whether one repository was read completely. Err
+// explains a failed read; the JSON report carries no error text, so the
+// command prints Err as a diagnostic instead.
 type RepositoryResult struct {
 	Repository string `json:"repository"`
 	Complete   bool   `json:"complete"`
-	Error      string `json:"error,omitempty"`
+	Err        error  `json:"-"`
 }
 
-// Report contains a globally limited result and per-repository failures.
+// Report contains a globally limited result and per-repository completeness.
+// HasMore reports that the limit cut the result while more items match.
+// NextCursor is set when HasMore is true or Complete is false.
 type Report struct {
 	Query        Options            `json:"query"`
 	Complete     bool               `json:"complete"`
+	HasMore      bool               `json:"hasMore"`
+	NextCursor   string             `json:"nextCursor,omitempty"`
 	Items        []Item             `json:"items"`
 	Repositories []RepositoryResult `json:"repositories"`
 }
@@ -141,34 +153,37 @@ type Client struct {
 	Run process.Run
 }
 
-// List validates the options, queries each repository independently, and
-// aggregates in inventory order. Invalid options produce an incomplete
-// report that carries the validation error on every repository.
-func (c Client) List(ctx context.Context, repos []inventory.Repository, options Options) Report {
+// List validates the options, queries each repository independently from
+// its position in cursor, and aggregates in inventory order. A failed
+// repository contributes no items, so nextCursor resumes it from where this
+// page started it. Invalid options produce an incomplete report that carries
+// the validation error on every repository.
+func (c Client) List(ctx context.Context, repos []inventory.Repository, options Options, cursor Cursor) Report {
 	report := Report{Query: options, Complete: true, Items: []Item{}, Repositories: make([]RepositoryResult, len(repos))}
 	if err := options.Validate(); err != nil {
 		report.Complete = len(repos) == 0
 		for index, repo := range repos {
-			report.Repositories[index] = RepositoryResult{Repository: repo.ID, Error: err.Error()}
+			report.Repositories[index] = RepositoryResult{Repository: repo.ID, Err: err}
 		}
 		return report
 	}
 	// Validate filled the default sort; report the controls actually used.
 	report.Query = options
 
+	// Retrieving one item past the limit proves whether more items exist.
+	retrieval := options
+	if !options.All {
+		retrieval.Limit++
+	}
 	candidates := make([][]Item, len(repos))
 	jobs := make(chan int)
 	var workers sync.WaitGroup
 	for range min(4, len(repos)) {
 		workers.Go(func() {
 			for index := range jobs {
-				items, err := c.listRepository(ctx, repos[index].ID, options)
+				items, err := c.listRepository(ctx, repos[index].ID, retrieval, cursor.position(repos[index].ID))
 				candidates[index] = items
-				result := RepositoryResult{Repository: repos[index].ID, Complete: err == nil}
-				if err != nil {
-					result.Error = err.Error()
-				}
-				report.Repositories[index] = result
+				report.Repositories[index] = RepositoryResult{Repository: repos[index].ID, Complete: err == nil, Err: err}
 			}
 		})
 	}
@@ -182,11 +197,20 @@ func (c Client) List(ctx context.Context, repos []inventory.Repository, options 
 		report.Complete = report.Complete && result.Complete
 		report.Items = append(report.Items, candidates[index]...)
 	}
-	report.Items = best(report.Items, options)
+	report.Items = best(report.Items, retrieval)
+	if !options.All && len(report.Items) > options.Limit {
+		report.HasMore = true
+		report.Items = report.Items[:options.Limit]
+	}
+	if report.HasMore || !report.Complete {
+		report.NextCursor = cursor.next(repos, report).encode(options, repos)
+	}
 	return report
 }
 
-func (c Client) listRepository(ctx context.Context, id string, options Options) ([]Item, error) {
+// listRepository returns the repository's best items after position, or no
+// items and an error when it cannot prove them.
+func (c Client) listRepository(ctx context.Context, id string, options Options, position *Key) ([]Item, error) {
 	resource := "issue"
 	fields := "number,title,url,state,stateReason,createdAt,updatedAt,closedAt"
 	if options.Resource == ResourcePRs {
@@ -196,51 +220,77 @@ func (c Client) listRepository(ctx context.Context, id string, options Options) 
 	if options.Sort == SortClosed || options.Sort == SortMerged {
 		retrievalSort, retrievalOrder = SortUpdated, OrderDesc
 	}
-	var candidates []Item
+	// Ordinary GraphQL listing serves only created descending. Every other
+	// retrieval order goes through gh search, which stops at candidateCap.
+	search := retrievalSort != SortCreated || retrievalOrder != OrderDesc
+	capped := search || !options.All
 	// gh list exposes a total limit, not a cursor. Expand the ordered prefix
-	// by 100 until the bound proves completeness or the search cap is reached.
-	for limit := 100; limit <= 1000; limit += 100 {
+	// by 100 until the bound proves completeness, or double it under --all
+	// until the repository is exhausted, stopping at the cap where one applies.
+	for limit := 100; ; {
 		args := []string{resource, "list", "--repo", id, "--state", string(options.State), "--limit", strconv.Itoa(limit), "--json", fields}
-		if retrievalSort != SortCreated || retrievalOrder != OrderDesc {
+		if search {
 			args = append(args, "--search", "sort:"+string(retrievalSort)+"-"+string(retrievalOrder))
 		}
 		body, err := c.Run(ctx, "", "gh", args...)
 		if err != nil {
 			host, _, _ := strings.Cut(id, "/")
-			return candidates, fmt.Errorf("query %q on host %q with gh: %w", id, host, err)
+			return nil, fmt.Errorf("query %q on host %q with gh: %w", id, host, err)
 		}
 		page, err := decode(body, id, options)
 		if err != nil {
-			return candidates, err
+			return nil, err
 		}
 		for index := 1; index < len(page); index++ {
 			comparison := page[index-1].Timestamp(retrievalSort).Compare(page[index].Timestamp(retrievalSort))
 			if (retrievalOrder == OrderDesc && comparison < 0) || (retrievalOrder == OrderAsc && comparison > 0) {
-				return candidates, fmt.Errorf("query %q returned items outside the requested retrieval order; cannot prove completeness", id)
+				return nil, fmt.Errorf("query %q returned items outside the requested retrieval order; cannot prove completeness", id)
 			}
 		}
 		var last Item
 		if len(page) > 0 {
 			last = page[len(page)-1]
 		}
-		candidates = best(page, options)
+		var remaining []Item
+		for _, item := range page {
+			if after(item, position, options) {
+				remaining = append(remaining, item)
+			}
+		}
+		candidates := best(remaining, options)
 		if len(page) < limit {
 			return candidates, nil
 		}
-		if len(candidates) < options.Limit {
-			continue
-		}
-		threshold := candidates[len(candidates)-1].Timestamp(options.Sort)
-		if options.Sort == SortClosed || options.Sort == SortMerged {
-			// Strict inequality also resolves item-number ties at the boundary.
-			if options.Order == OrderDesc && threshold.After(last.UpdatedAt) {
-				return candidates, nil
-			}
-		} else if (options.Order == OrderDesc && threshold.After(last.Timestamp(options.Sort))) || (options.Order == OrderAsc && threshold.Before(last.Timestamp(options.Sort))) {
+		if !options.All && len(candidates) >= options.Limit && bounded(candidates[len(candidates)-1], last, options) {
 			return candidates, nil
 		}
+		if capped && limit >= candidateCap {
+			break
+		}
+		if options.All {
+			limit *= 2
+		} else {
+			limit += 100
+		}
+		if capped {
+			limit = min(limit, candidateCap)
+		}
 	}
-	return candidates, fmt.Errorf("incomplete: reached the 1000-candidate cap before proving the requested ordering; reduce the limit or query directly with gh")
+	if options.All {
+		return nil, errors.New("incomplete: reached gh search's 1000-candidate cap before exhausting the repository; --all is uncapped only for created descending order")
+	}
+	return nil, errors.New("incomplete: reached the 1000-candidate cap before proving the requested ordering; reduce the limit or query directly with gh")
+}
+
+// bounded reports whether the unseen items, which follow last in retrieval
+// order, all sort after threshold, so the candidates are proven.
+func bounded(threshold, last Item, options Options) bool {
+	at := threshold.Timestamp(options.Sort)
+	if options.Sort == SortClosed || options.Sort == SortMerged {
+		// Strict inequality also resolves item-number ties at the boundary.
+		return options.Order == OrderDesc && at.After(last.UpdatedAt)
+	}
+	return (options.Order == OrderDesc && at.After(last.Timestamp(options.Sort))) || (options.Order == OrderAsc && at.Before(last.Timestamp(options.Sort)))
 }
 
 func decode(body, id string, options Options) ([]Item, error) {
@@ -278,28 +328,24 @@ func decode(body, id string, options Options) ([]Item, error) {
 	return items, nil
 }
 
+// best orders items by their key, drops repeated URLs, and keeps at most
+// options.Limit unless options.All is set.
 func best(items []Item, options Options) []Item {
 	slices.SortFunc(items, func(a, b Item) int {
-		order := a.Timestamp(options.Sort).Compare(b.Timestamp(options.Sort))
-		if order != 0 {
-			if options.Order == OrderDesc {
-				return -order
-			}
-			return order
-		}
-		if order := strings.Compare(a.Repository, b.Repository); order != 0 {
-			return order
-		}
-		return a.Number - b.Number
+		return compareKeys(a.key(options.Sort), b.key(options.Sort), options.Order)
 	})
+	capacity := len(items)
+	if !options.All {
+		capacity = min(options.Limit, capacity)
+	}
 	seen := make(map[string]bool)
-	selected := make([]Item, 0, min(options.Limit, len(items)))
+	selected := make([]Item, 0, capacity)
 	for _, item := range items {
 		if !seen[item.URL] {
 			seen[item.URL] = true
 			selected = append(selected, item)
 		}
-		if len(selected) == options.Limit {
+		if !options.All && len(selected) == options.Limit {
 			break
 		}
 	}

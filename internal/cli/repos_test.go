@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -53,7 +54,7 @@ func TestReposTopicFailureExitsAfterWritingReport(t *testing.T) {
 	t.Setenv("CODE_DIR", root)
 	t.Setenv("PATH", "")
 
-	out, _, err := execute(t, "repos", "--config", configPath, "--json")
+	out, stderr, err := execute(t, "repos", "--config", configPath, "--json")
 
 	if err == nil || exitstatus.ExitCode(err) != exitstatus.ExitWork || !json.Valid([]byte(out)) {
 		t.Fatalf("repos without gh = %q, %v (exit %d), want a work failure with a report", out, err, exitstatus.ExitCode(err))
@@ -62,8 +63,11 @@ func TestReposTopicFailureExitsAfterWritingReport(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &report); err != nil {
 		t.Fatal(err)
 	}
-	if report.Complete || !report.TopicsFetched || len(report.Results) != 1 || !strings.Contains(report.Results[0].Error, "--no-topics") {
-		t.Fatalf("report = %+v, want one failed entry naming --no-topics", report)
+	if report.Complete || !report.TopicsFetched || len(report.Results) != 1 || strings.Contains(out, `"error"`) {
+		t.Fatalf("report = %s, want one incomplete entry without error text", out)
+	}
+	if !strings.HasPrefix(stderr, "github.com/a/one error: ") || strings.Count(stderr, "\n") != 1 {
+		t.Errorf("stderr = %q, want one repository error line", stderr)
 	}
 	if !strings.Contains(err.Error(), "--no-topics") {
 		t.Errorf("error = %v, want a --no-topics hint", err)
@@ -99,10 +103,10 @@ func TestRenderReposAlignsColumnsAndSummarizesTopics(t *testing.T) {
 			name: "fetched topics with a failure",
 			report: repos.Report{TopicsFetched: true, Results: []repos.Entry{
 				{Repository: "github.com/a/one", Path: "/code/github.com/a/one", Branch: "develop", Groups: []string{"clis", "tools"}, Topics: []string{"cli", "go"}},
-				{Repository: "github.com/a/two-longer", Path: "/code/github.com/a/two-longer", Groups: []string{}, Topics: []string{}, Error: "gh: HTTP 401\nsecond line; pass --no-topics"},
+				{Repository: "github.com/a/two-longer", Path: "/code/github.com/a/two-longer", Groups: []string{}, Topics: []string{}, Err: errors.New("gh: HTTP 401")},
 			}},
 			want: "github.com/a/one         branch=develop  groups=clis,tools  topics=cli,go\n" +
-				"github.com/a/two-longer  branch=default  groups=-           topics=-       gh: HTTP 401\n" +
+				"github.com/a/two-longer  branch=default  groups=-           topics=-\n" +
 				"2 repositories, topics fetched, 1 failed\n",
 		},
 		{

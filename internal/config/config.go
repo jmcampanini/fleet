@@ -9,18 +9,18 @@ import (
 
 	"github.com/jmcampanini/fleet/internal/inventory"
 	"github.com/jmcampanini/go-config-loader/configloader"
-	"github.com/jmcampanini/go-config-loader/pflagloader"
-	"github.com/spf13/pflag"
 )
 
-// Issues holds the total issue limit.
+// Issues holds the default limit of the issues command. The config tag
+// names its environment variable, FLEET_ISSUES_LIMIT.
 type Issues struct {
-	Limit int `toml:"limit" config:"issues-limit" help:"Maximum total issues across the selection"`
+	Limit int `toml:"limit" config:"issues-limit"`
 }
 
-// PRs holds the total pull request limit.
+// PRs holds the default limit of the prs command. The config tag names its
+// environment variable, FLEET_PRS_LIMIT.
 type PRs struct {
-	Limit int `toml:"limit" config:"prs-limit" help:"Maximum total pull requests across the selection"`
+	Limit int `toml:"limit" config:"prs-limit"`
 }
 
 // Repo holds the optional settings of one configured repository.
@@ -47,11 +47,11 @@ type Loaded struct {
 	Report    configloader.LoadReport
 }
 
-// Load applies defaults, the configuration file, environment, then root
-// flags, and validates the inventory before returning. A path the caller
-// supplies must load. The discovered user-level file may be absent; when
-// something exists at that path it must load too.
-func Load(path string, flags *pflag.FlagSet) (Loaded, error) {
+// Load applies defaults, the configuration file, then environment, and
+// validates the inventory before returning. A path the caller supplies must
+// load. The discovered user-level file may be absent; when something exists
+// at that path it must load too.
+func Load(path string) (Loaded, error) {
 	discovered := path == ""
 	if discovered {
 		helper, err := configloader.NewFileHelper("fleet", "config.toml")
@@ -79,11 +79,7 @@ func Load(path string, flags *pflag.FlagSet) (Loaded, error) {
 	if err != nil {
 		return Loaded{}, err
 	}
-	flagLoader, err := pflagloader.NewLoader[Config](flags)
-	if err != nil {
-		return Loaded{}, err
-	}
-	cfg, report, err := configloader.Load(defaults(), fileLoader, envLoader, flagLoader)
+	cfg, report, err := configloader.Load(defaults(), fileLoader, envLoader)
 	if err != nil {
 		return Loaded{}, fmt.Errorf("load config %q: %w", path, err)
 	}

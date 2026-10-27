@@ -9,9 +9,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/jmcampanini/fleet/internal/config"
 	"github.com/jmcampanini/fleet/internal/exitstatus"
-	"github.com/jmcampanini/go-config-loader/pflagloader"
 	"github.com/spf13/cobra"
 )
 
@@ -38,7 +36,7 @@ Common tasks:
   Clone every repository:           fleet clone --all
   Preview a sync without changes:   fleet sync gibson --group clis --dry-run
   Describe the inventory as JSON:   fleet repos --json
-  List the 30 newest open issues:   fleet issues --issues-limit 30
+  List the 30 newest open issues:   fleet issues --limit 30
   List merged pull requests:        fleet prs --state merged
   List groups and their members:    fleet groups
   Show configuration with sources:  fleet config --provenance`,
@@ -48,10 +46,6 @@ Common tasks:
 	root.InitDefaultHelpFlag()
 	root.InitDefaultVersionFlag()
 	root.PersistentFlags().String("config", "", "Read this required TOML file instead of the default")
-	if err := pflagloader.Register[config.Config](root.PersistentFlags()); err != nil {
-		// Registration depends only on this package's static configuration type.
-		panic(err)
-	}
 	root.AddCommand(newConfig(), newClone(), newSync(), newRepos(), newIssues(), newPRs(), newGroups(), exitCodesTopic(), jsonReportsTopic())
 	return root
 }

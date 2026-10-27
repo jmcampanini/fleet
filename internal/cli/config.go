@@ -23,9 +23,11 @@ error exits 2 with empty stdout.
 
 Keys:
   issues.limit
-    Maximum total issues across the selection; a positive integer.
+    Default --limit of issues: the maximum total issues returned across
+    the selection; a positive integer.
   prs.limit
-    Maximum total pull requests across the selection; a positive integer.
+    Default --limit of prs: the maximum total pull requests returned
+    across the selection; a positive integer.
   repos."server/org/repo"
     One table per repository. The key is the repository identity:
     exactly server/org/repo with no URL scheme. Each component uses
@@ -58,14 +60,14 @@ Example configuration:
 
 ` + configHelp,
 		Example: `  fleet config
-  fleet config --config ./config.toml --issues-limit 30 --provenance`,
+  FLEET_ISSUES_LIMIT=30 fleet config --config ./config.toml --provenance`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			path, err := configPath(cmd)
 			if err != nil {
 				return err
 			}
-			loaded, err := config.Load(path, cmd.Root().PersistentFlags())
+			loaded, err := config.Load(path)
 			if err != nil {
 				return err
 			}
