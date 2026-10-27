@@ -75,18 +75,21 @@ func TestListContinuesAfterTopicFailure(t *testing.T) {
 		t.Error("report is complete despite failures")
 	}
 	failed, garbled, ok := report.Results[0], report.Results[1], report.Results[2]
-	for _, want := range []string{`"github.com/a/fails"`, `host "github.com"`, "gh: HTTP 401", "--no-topics"} {
-		if !strings.Contains(failed.Error, want) {
-			t.Errorf("error %q lacks %q", failed.Error, want)
+	if failed.Err == nil {
+		t.Fatal("failed entry has no error")
+	}
+	for _, want := range []string{`"github.com/a/fails"`, `host "github.com"`, "gh: HTTP 401"} {
+		if !strings.Contains(failed.Err.Error(), want) {
+			t.Errorf("error %q lacks %q", failed.Err, want)
 		}
 	}
 	if len(failed.Topics) != 0 || failed.Topics == nil {
 		t.Errorf("failed entry topics = %v, want an empty list", failed.Topics)
 	}
-	if garbled.Error == "" || !strings.Contains(garbled.Error, "unnamed topic") {
-		t.Errorf("garbled entry error = %q", garbled.Error)
+	if garbled.Err == nil || !strings.Contains(garbled.Err.Error(), "unnamed topic") {
+		t.Errorf("garbled entry error = %v", garbled.Err)
 	}
-	if ok.Error != "" || !reflect.DeepEqual(ok.Topics, []string{"go"}) {
+	if ok.Err != nil || !reflect.DeepEqual(ok.Topics, []string{"go"}) {
 		t.Errorf("ok entry = %+v", ok)
 	}
 }

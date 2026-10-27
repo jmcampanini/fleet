@@ -3,13 +3,17 @@ package cli
 import "github.com/spf13/cobra"
 
 func jsonReportsTopic() *cobra.Command {
-	return newHelpTopic("json-reports", "Fields and values of the --json reports", `Every command that accepts --json writes one JSON object followed by a
-newline to stdout. Configuration and selection errors leave stdout empty.
-Repository commands report after work finishes, including on failure.
-Field names are lowercase with underscores. Empty arrays are [], never
-null. Optional strings are omitted when absent. Timestamps are RFC 3339
-strings; a missing event timestamp is null. Consumers should tolerate
-added fields.
+	return newHelpTopic("json-reports", "Fields of the --json reports and the JSONL and CSV records", `Every command that accepts --json writes one JSON object followed by a
+newline to stdout, or to the --output-file file of issues and prs.
+Configuration and selection errors leave stdout empty. Repository commands
+report after work finishes, including on failure, except that issues and
+prs write no --output-file file after a failed read. The repos, issues,
+and prs reports carry no error text; their failures appear on stderr.
+Field names are lowercase with underscores, except hasMore and nextCursor,
+which keep the camelCase names every data workflow command shares. Empty
+arrays are [], never null.
+Optional strings are omitted when absent. Timestamps are RFC 3339 strings;
+a missing event timestamp is null. Consumers should tolerate added fields.
 
 Group report:
   groups             Selected groups, sorted alphabetically by name.
@@ -53,28 +57,53 @@ Repos report:
   results            One entry per selected repository, sorted by
                      complete identity.
 
-Each entry carries repository, path, branch, groups, topics, and error.
-path is the expected checkout under CODE_DIR whether or not it exists.
-branch is the configured override, empty when the remote default applies.
-groups lists the configured group names containing the repository, sorted.
+Each entry carries repository, path, branch, groups, and topics. path is
+the expected checkout under CODE_DIR whether or not it exists. branch is
+the configured override, empty when the remote default applies. groups
+lists the configured group names containing the repository, sorted.
 topics lists the repository's GitHub topics, sorted, and is empty when they
-were not fetched or the fetch failed. error is present only for a failed
-topic retrieval and names --no-topics as the offline alternative.
+were not fetched or the fetch failed. A failed fetch prints
+'<repository> error: <message>' on stderr instead.
 
 Issue and PR report:
-  query              resource, state, sort, order, and limit in effect.
-  complete           Every repository established enough candidates for
-                     the requested global ordering. An incomplete report is
-                     not the newest or oldest across the selection.
+  query              resource, state, sort, order, limit, and all in
+                     effect. limit is an integer, 0 when all is true.
+  complete           Every repository was read and established enough
+                     candidates for the requested global ordering. false
+                     marks a failed read: the failed repositories' items
+                     may be missing, and the report is not the newest or
+                     oldest across the selection. A limit cut leaves it
+                     true.
+  hasMore            true when the limit cut the items while more match.
+  nextCursor         String to pass to --cursor for the next items. Present
+                     when hasMore is true or complete is false.
   items              Matching items after deduplication, ordering, and the
                      limit.
-  repositories       repository, complete, and optional error for each
-                     queried repository.
+  repositories       repository and complete for each queried repository.
 
-Each item carries repository, number, title, url, state, state_reason,
-created_at, updated_at, closed_at, and merged_at. state is open, closed,
-or merged. state_reason is GitHub's issue state reason verbatim, such as
-COMPLETED or NOT_PLANNED, and is omitted for pull requests. closed_at and
-merged_at are event timestamps or null; merged_at is null for issues and
-unmerged pull requests.`)
+Items:
+  Each JSON item, JSONL line, and CSV row carries these fields, in this
+  CSV column order. Fleet reads them from gh issue list --json or gh pr
+  list --json, whose fields follow GitHub's GraphQL Issue and PullRequest
+  objects. number, title, and url pass through unchanged; Fleet renames
+  stateReason and the camelCase timestamps, lowercases state, and adds
+  repository.
+  repository         String: Fleet's server/org/repo identity.
+  number             Integer: gh number.
+  title              String: gh title.
+  url                String: gh url.
+  state              String: gh state lowercased, one of open, closed, or
+                     merged.
+  state_reason       String: gh stateReason verbatim, such as COMPLETED or
+                     NOT_PLANNED. Omitted from JSON items and JSONL lines
+                     when empty, which it always is for pull requests.
+  created_at         Timestamp: gh createdAt.
+  updated_at         Timestamp: gh updatedAt.
+  closed_at          Timestamp or null: gh closedAt.
+  merged_at          Timestamp or null: gh mergedAt; null for issues and
+                     unmerged pull requests.
+
+CSV output is RFC 4180 with a header row naming the columns above, unless
+--no-header. Integers are decimal, timestamps are RFC 3339, and an empty
+string or a null is an empty cell.`)
 }

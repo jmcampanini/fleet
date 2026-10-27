@@ -12,14 +12,16 @@ func newPRs() *cobra.Command {
 		short:    "List pull requests across the selected repositories",
 		long: `List pull requests across the configured selection. Issues are excluded.
 Zero matching items succeeds.`,
-		example: `  fleet prs gibson --group clis --prs-limit 30
+		example: `  fleet prs gibson --group clis --limit 30
   fleet prs --state merged
-  fleet prs --state all --sort updated --order asc --json`,
+  fleet prs --state all --sort updated --order asc --json
+  fleet prs --all --csv --output-file prs.csv`,
 	}, &flags)
 	flags.selection.bind(command.Flags())
 	command.Flags().StringVar(&flags.state, "state", string(query.StateOpen), "State: open, closed, merged, all")
 	command.Flags().StringVar(&flags.sort, "sort", "", "Sort: created, updated, closed, merged")
 	command.Flags().StringVar(&flags.order, "order", string(query.OrderDesc), "Timestamp order: asc or desc")
-	command.Flags().BoolVar(&flags.jsonOutput, "json", false, "Emit a JSON report")
+	flags.bindPaging(command, query.ResourcePRs)
+	flags.output.bind(command)
 	return command
 }

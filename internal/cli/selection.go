@@ -27,7 +27,7 @@ func (s selection) resolve(cmd *cobra.Command, refs []string) (config.Loaded, []
 	if err != nil {
 		return config.Loaded{}, nil, err
 	}
-	loaded, err := config.Load(path, cmd.Root().PersistentFlags())
+	loaded, err := config.Load(path)
 	if err != nil {
 		return config.Loaded{}, nil, err
 	}

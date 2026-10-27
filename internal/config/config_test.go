@@ -7,30 +7,15 @@ import (
 	"testing"
 
 	"github.com/jmcampanini/go-config-loader/configreporter"
-	"github.com/jmcampanini/go-config-loader/pflagloader"
-	"github.com/spf13/pflag"
 )
 
-func flags(t *testing.T, args ...string) *pflag.FlagSet {
-	t.Helper()
-	f := pflag.NewFlagSet("test", pflag.ContinueOnError)
-	if err := pflagloader.Register[Config](f); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.Parse(args); err != nil {
-		t.Fatal(err)
-	}
-	return f
-}
-
 func TestLayersAndProvenance(t *testing.T) {
-	t.Setenv("FLEET_ISSUES_LIMIT", "25")
 	t.Setenv("FLEET_PRS_LIMIT", "26")
 	path := filepath.Join(t.TempDir(), "fleet.toml")
-	if err := os.WriteFile(path, []byte("[issues]\nlimit = 20\n[repos.\"github.com/a/one\"]\nbranch = \"develop\"\n[repos.\"github.com/a/two\"]\n[groups]\nall = [\"one\", \"two\", \"a/one\"]\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("[issues]\nlimit = 30\n[prs]\nlimit = 20\n[repos.\"github.com/a/one\"]\nbranch = \"develop\"\n[repos.\"github.com/a/two\"]\n[groups]\nall = [\"one\", \"two\", \"a/one\"]\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := Load(path, flags(t, "--issues-limit", "30"))
+	loaded, err := Load(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +32,7 @@ func TestLayersAndProvenance(t *testing.T) {
 	for _, row := range rows {
 		joined += strings.Join(row, " ") + "\n"
 	}
-	for _, want := range []string{"issues.limit", "prs.limit", path, "<env>", "<pflag>"} {
+	for _, want := range []string{"issues.limit", "prs.limit", path, "<env>"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("provenance %q missing %q", joined, want)
 		}
@@ -59,15 +44,12 @@ func TestLayersAndProvenance(t *testing.T) {
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	// Remove the overrides so the written file alone must reproduce the
-	// values; t.Setenv above restores them when the test ends.
-	if err := os.Unsetenv("FLEET_ISSUES_LIMIT"); err != nil {
-		t.Fatal(err)
-	}
+	// Remove the override so the written file alone must reproduce the
+	// values; t.Setenv above restores it when the test ends.
 	if err := os.Unsetenv("FLEET_PRS_LIMIT"); err != nil {
 		t.Fatal(err)
 	}
-	roundtrip, err := Load(path, flags(t))
+	roundtrip, err := Load(path)
 	if err != nil || roundtrip.Config.Issues.Limit != 30 || roundtrip.Config.PRs.Limit != 26 {
 		t.Fatalf("roundtrip = %+v, %v", roundtrip.Config, err)
 	}
@@ -76,7 +58,7 @@ func TestLayersAndProvenance(t *testing.T) {
 func TestMissingDiscoveredFileLoadsDefaults(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
-	loaded, err := Load("", flags(t))
+	loaded, err := Load("")
 	if err != nil {
 		t.Fatalf("Load(\"\") error = %v, want nil", err)
 	}
@@ -92,7 +74,7 @@ func TestMissingDiscoveredFileLoadsDefaults(t *testing.T) {
 func TestMissingExplicitPathErrors(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "missing.toml")
 
-	_, err := Load(path, flags(t))
+	_, err := Load(path)
 	if err == nil || !strings.Contains(err.Error(), path) {
 		t.Fatalf("Load(%q) error = %v, want the missing path", path, err)
 	}
@@ -106,7 +88,7 @@ func TestDirectoryAtDiscoveredPathErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := Load("", flags(t))
+	_, err := Load("")
 	if err == nil || !strings.Contains(err.Error(), path) {
 		t.Fatalf("Load(\"\") error = %v, want the directory path", err)
 	}
@@ -123,14 +105,14 @@ func TestDiscoveryAndStrictValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := Load("", flags(t)); err == nil {
+		if _, err := Load(""); err == nil {
 			t.Errorf("Load(%q) succeeded", body)
 		}
 	}
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := Load("", flags(t))
+	loaded, err := Load("")
 	if err != nil {
 		t.Fatal(err)
 	}

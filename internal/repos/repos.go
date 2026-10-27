@@ -15,14 +15,16 @@ import (
 )
 
 // Entry describes one configured repository. Topics is empty when they were
-// not requested or could not be retrieved; Error explains a retrieval failure.
+// not requested or could not be retrieved. Err explains a retrieval failure;
+// the JSON report carries no error text, so the command prints Err as a
+// diagnostic instead.
 type Entry struct {
 	Repository string   `json:"repository"`
 	Path       string   `json:"path"`
 	Branch     string   `json:"branch"`
 	Groups     []string `json:"groups"`
 	Topics     []string `json:"topics"`
-	Error      string   `json:"error,omitempty"`
+	Err        error    `json:"-"`
 }
 
 // Report lists the selected repositories in complete-identity order.
@@ -62,7 +64,7 @@ func (c Client) List(ctx context.Context, root string, repos []inventory.Reposit
 			for index := range jobs {
 				topics, err := c.topics(ctx, repos[index].ID)
 				if err != nil {
-					report.Results[index].Error = err.Error()
+					report.Results[index].Err = err
 					continue
 				}
 				report.Results[index].Topics = topics
@@ -76,7 +78,7 @@ func (c Client) List(ctx context.Context, root string, repos []inventory.Reposit
 	workers.Wait()
 
 	for _, entry := range report.Results {
-		report.Complete = report.Complete && entry.Error == ""
+		report.Complete = report.Complete && entry.Err == nil
 	}
 	return report
 }
@@ -85,7 +87,7 @@ func (c Client) topics(ctx context.Context, id string) ([]string, error) {
 	body, err := c.Run(ctx, "", "gh", "repo", "view", id, "--json", "repositoryTopics")
 	if err != nil {
 		host, _, _ := strings.Cut(id, "/")
-		return nil, fmt.Errorf("fetch topics for %q on host %q with gh: %w; pass --no-topics to list without contacting GitHub", id, host, err)
+		return nil, fmt.Errorf("fetch topics for %q on host %q with gh: %w", id, host, err)
 	}
 
 	var raw struct {
