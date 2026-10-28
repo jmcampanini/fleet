@@ -12,7 +12,7 @@ func newIssues() *cobra.Command {
 		short:    "List issues across the selected repositories",
 		long: `List issues across the configured selection. Pull requests are excluded.
 Zero matching items succeeds.`,
-		example: `  fleet issues gibson --group clis --limit 30
+		example: `  fleet issues jstack --group clis --limit 30
   fleet issues --state closed
   fleet issues --state all --sort updated --order asc --json
   fleet issues --all --csv --output-file issues.csv`,

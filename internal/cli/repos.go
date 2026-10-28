@@ -42,7 +42,7 @@ Paths:
 
 ` + selectionHelp + "\n\n" + configHelp + "\n\n" + outputHelp,
 		Example: `  fleet repos
-  fleet repos gibson --group clis --json
+  fleet repos jstack --group clis --json
   fleet repos --no-topics`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, refs []string) error {

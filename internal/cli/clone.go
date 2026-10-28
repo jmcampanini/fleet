@@ -39,7 +39,7 @@ clones remain in place and appear in the report.
 
 ` + selectionHelp + "\n\n" + configHelp + "\n\n" + outputHelp,
 		Example: `  fleet clone --all
-  fleet clone gibson molly --group clis
+  fleet clone jstack molly --group clis
   fleet clone --group personal-agent --dry-run --json`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, refs []string) error {

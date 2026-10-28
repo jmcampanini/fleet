@@ -34,7 +34,7 @@ Every other command needs neither.
 
 Common tasks:
   Clone every repository:           fleet clone --all
-  Preview a sync without changes:   fleet sync gibson --group clis --dry-run
+  Preview a sync without changes:   fleet sync jstack --group clis --dry-run
   Describe the inventory as JSON:   fleet repos --json
   List the 30 newest open issues:   fleet issues --limit 30
   List merged pull requests:        fleet prs --state merged
