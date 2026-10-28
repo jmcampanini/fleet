@@ -50,7 +50,7 @@ contains Overlay sources.
 
 ` + selectionHelp + "\n\n" + configHelp + "\n\n" + outputHelp,
 		Example: `  fleet sync
-  fleet sync gibson molly --group clis --group tools
+  fleet sync jstack molly --group clis --group tools
   fleet sync --group personal-agent --dry-run --json`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, refs []string) error {

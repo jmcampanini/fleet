@@ -12,7 +12,7 @@ func newPRs() *cobra.Command {
 		short:    "List pull requests across the selected repositories",
 		long: `List pull requests across the configured selection. Issues are excluded.
 Zero matching items succeeds.`,
-		example: `  fleet prs gibson --group clis --limit 30
+		example: `  fleet prs jstack --group clis --limit 30
   fleet prs --state merged
   fleet prs --state all --sort updated --order asc --json
   fleet prs --all --csv --output-file prs.csv`,

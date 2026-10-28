@@ -58,7 +58,7 @@ mise run build
 | `fleet clone --all` | Clone every configured repository that is not checked out yet. |
 | `fleet clone --group clis` | Clone the members of one group. |
 | `fleet sync` | Fast-forward every existing checkout to its target branch and warn about missing ones. |
-| `fleet sync gibson molly --dry-run` | Show what sync would do to two repositories without changing them. |
+| `fleet sync jstack molly --dry-run` | Show what sync would do to two repositories without changing them. |
 | `fleet repos --json` | Describe every configured repository with its path, groups, and GitHub topics. |
 | `fleet repos --no-topics` | List the inventory from the TOML file without contacting GitHub. |
 | `fleet issues --limit 30` | List the 30 newest open issues across the inventory. |
@@ -81,13 +81,13 @@ The canonical reference is `fleet --help`, each command's `--help`, and the help
 Fleet reads `$XDG_CONFIG_HOME/fleet/config.toml`, or `~/.config/fleet/config.toml` when `XDG_CONFIG_HOME` is empty. A minimal file:
 
 ```toml
-[repos."github.com/jmcampanini/gibson"]
+[repos."github.com/jmcampanini/jstack"]
 
 [repos."github.com/jmcampanini/molly"]
 branch = "develop"
 
 [groups]
-agents = ["gibson", "molly"]
+agents = ["jstack", "molly"]
 ```
 
 `fleet config --help` documents the format and precedence.
