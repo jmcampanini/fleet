@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/jmcampanini/fleet/internal/config"
+	"github.com/jmcampanini/fleet/internal/exitstatus"
 	"github.com/spf13/cobra"
 )
 
@@ -37,7 +37,8 @@ supported. Invalid configuration or an unknown group fails before output.
 Results go to stdout; diagnostics go to stderr. --json emits one object
 containing a groups array; see 'fleet help json-reports' for its fields.
 No configured groups succeeds with 'No groups configured.' on stderr and
-empty stdout, or {"groups":[]} with --json. Success exits 0; errors exit 2.
+empty stdout, or {"groups":[]} with --json. Success exits 0; configuration
+and selection errors exit 2. An output failure exits 1.
 This command never prompts and needs no CODE_DIR, Git, gh, local checkout,
 terminal, or network.
 
@@ -47,11 +48,7 @@ terminal, or network.
   fleet groups --group agents --json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			path, err := configPath(cmd)
-			if err != nil {
-				return err
-			}
-			loaded, err := config.Load(path)
+			loaded, err := loadConfig(cmd)
 			if err != nil {
 				return err
 			}
@@ -75,7 +72,10 @@ terminal, or network.
 				report.Groups = append(report.Groups, group)
 			}
 
-			return renderGroups(cmd, report, jsonOutput)
+			if err := renderGroups(cmd, report, jsonOutput); err != nil {
+				return exitstatus.WorkError{Err: err}
+			}
+			return nil
 		},
 	}
 	command.Flags().StringArrayVar(&groups, "group", nil, "Select one group; repeat for several groups")

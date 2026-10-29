@@ -12,6 +12,6 @@ func execute(t *testing.T, args ...string) (string, string, error) {
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)
 	root.SetArgs(args)
-	err := root.ExecuteContext(t.Context())
+	err := runRoot(t.Context(), root)
 	return stdout.String(), stderr.String(), err
 }

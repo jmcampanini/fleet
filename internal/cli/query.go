@@ -76,8 +76,6 @@ func newQuery(spec querySpec, flags *queryFlags) *cobra.Command {
 			}
 			switch {
 			case options.All:
-			case cmd.Flags().Changed("limit"):
-				options.Limit = flags.limit
 			case spec.resource == query.ResourcePRs:
 				options.Limit = loaded.Config.PRs.Limit
 			default:

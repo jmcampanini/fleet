@@ -5,49 +5,58 @@ Fleet clones the primary Git checkouts of a configured repository inventory into
 
 ## Install
 
-Fleet's release distribution provides prebuilt binaries for Linux and macOS on amd64 and arm64. The first release has not been published yet; until then, use the HEAD formula or build from source below.
+Fleet publishes versioned releases with prebuilt binaries for Linux and macOS on amd64 and arm64.
 
+Homebrew installs the release cask with Git, gh, and bash, zsh, and fish completions:
 
 ```sh
-brew install --cask jmcampanini/tap/fleet # Install with Homebrew
-brew upgrade --cask jmcampanini/tap/fleet # Upgrade with Homebrew
-mise use -g github:jmcampanini/fleet     # Install with mise
-mise upgrade github:jmcampanini/fleet    # Upgrade with mise
+brew install --cask jmcampanini/tap/fleet
+brew upgrade --cask jmcampanini/tap/fleet
 ```
 
-Homebrew installs Git, gh, and bash, zsh, and fish completions. For mise or archive installations, install Git and gh separately. Authentication prerequisites are listed under required external programs.
+The mise release channel requires Git and gh to be installed separately:
 
-Or download an archive for your OS and architecture from the [releases page](https://github.com/jmcampanini/fleet/releases), extract it, and copy `fleet` onto your `PATH`. To upgrade, replace the binary with the new release. Releases include SHA-256 checksums and GitHub build provenance attestations. On macOS, if a browser download is quarantined, run `xattr -d com.apple.quarantine fleet` on the extracted binary before running it.
+```sh
+mise use -g github:jmcampanini/fleet
+mise upgrade github:jmcampanini/fleet
+```
 
+Release archives require Git and gh; choose a version and platform from the [releases page](https://github.com/jmcampanini/fleet/releases), then repeat these steps with a newer version to upgrade:
 
-### Homebrew from HEAD
+```sh
+version=0.1.0
+platform=darwin_arm64 # Or darwin_amd64, linux_arm64, linux_amd64.
+archive="fleet_${version}_${platform}.tar.gz"
+gh release download "v${version}" --repo jmcampanini/fleet --pattern "$archive"
+tar -xzf "$archive"
+# On macOS, remove quarantine if the download was quarantined.
+if [ "$(uname -s)" = Darwin ]; then
+  xattr -dr com.apple.quarantine fleet
+fi
+mkdir -p "$HOME/.local/bin"
+install -m 755 fleet "$HOME/.local/bin/fleet"
+export PATH="$HOME/.local/bin:$PATH"
+```
 
-The existing HEAD formula remains an alternative that builds the latest source:
+Homebrew's HEAD formula builds the latest source with Go and installs Git and gh; uninstall any existing Fleet Homebrew package before switching between HEAD and releases:
 
 ```sh
 brew tap jmcampanini/fleet https://github.com/jmcampanini/fleet
 brew install --HEAD jmcampanini/fleet/fleet
-```
-
-Upgrade to the latest commit:
-
-```sh
 brew upgrade --fetch-HEAD jmcampanini/fleet/fleet
 ```
 
-The HEAD formula and release cask both install `fleet`; choose one. To switch to the cask, first run `brew uninstall --formula jmcampanini/fleet/fleet`, then install the cask above.
-
-
-### From source
+Building from source requires Git, gh, and mise; after updating the source, repeat the build and copy steps to upgrade:
 
 ```sh
-brew install git gh mise
 git clone https://github.com/jmcampanini/fleet
 cd fleet
 mise trust
 mise install
 mise run build
-# then copy ./build/fleet to a directory on your PATH
+mkdir -p "$HOME/.local/bin"
+install -m 755 build/fleet "$HOME/.local/bin/fleet"
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 
@@ -72,13 +81,13 @@ The canonical reference is `fleet --help`, each command's `--help`, and the help
 
 ## Required external programs
 
-- `git` must be on `PATH` and already authenticated for `clone` and `sync`.
-- `gh` must be on `PATH` and already authenticated for `repos`, `issues`, and `prs`.
+- `git` [2.36](https://github.com/git/git/blob/master/Documentation/RelNotes/2.36.0.adoc) or newer must be on `PATH` and already authenticated for `clone` and `sync`.
+- `gh` [2.50](https://github.com/cli/cli/releases/tag/v2.50.0) or newer must be on `PATH` and already authenticated for `repos`, `issues`, and `prs`.
 
 
 ## Configuration
 
-Fleet reads `$XDG_CONFIG_HOME/fleet/config.toml`, or `~/.config/fleet/config.toml` when `XDG_CONFIG_HOME` is empty. A minimal file:
+Fleet reads `$XDG_CONFIG_HOME/fleet/config.toml`, or `~/.config/fleet/config.toml` when `XDG_CONFIG_HOME` is empty or relative. A minimal file:
 
 ```toml
 [repos."github.com/jmcampanini/jstack"]

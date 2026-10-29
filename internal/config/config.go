@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 
 	"github.com/jmcampanini/fleet/internal/inventory"
 	"github.com/jmcampanini/go-config-loader/configloader"
@@ -47,22 +48,28 @@ type Loaded struct {
 	Report    configloader.LoadReport
 }
 
-// Load applies defaults, the configuration file, then environment, and
-// validates the inventory before returning. A path the caller supplies must
+// Overrides holds explicitly supplied flags before they enter the effective configuration.
+type Overrides struct {
+	IssuesLimit *int
+	PRsLimit    *int
+}
+
+// Load applies defaults, the configuration file, environment, and flags,
+// then validates the inventory. A path the caller supplies must
 // load. The discovered user-level file may be absent; when something exists
 // at that path it must load too.
-func Load(path string) (Loaded, error) {
+func Load(path string, flags Overrides) (Loaded, error) {
 	discovered := path == ""
 	if discovered {
-		helper, err := configloader.NewFileHelper("fleet", "config.toml")
-		if err != nil {
-			return Loaded{}, err
+		base := os.Getenv("XDG_CONFIG_HOME")
+		if !filepath.IsAbs(base) {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return Loaded{}, fmt.Errorf("discover configuration; supply --config PATH: %w", err)
+			}
+			base = filepath.Join(home, ".config")
 		}
-		paths := helper.XDGConfigFile()
-		if len(paths) == 0 {
-			return Loaded{}, fmt.Errorf("cannot discover configuration; supply --config PATH")
-		}
-		path = paths[0]
+		path = filepath.Join(base, "fleet", "config.toml")
 	}
 
 	var fileLoader configloader.ConfigLoader[Config]
@@ -82,6 +89,14 @@ func Load(path string) (Loaded, error) {
 	cfg, report, err := configloader.Load(defaults(), fileLoader, envLoader)
 	if err != nil {
 		return Loaded{}, fmt.Errorf("load config %q: %w", path, err)
+	}
+	if flags.IssuesLimit != nil {
+		cfg.Issues.Limit = *flags.IssuesLimit
+		report.Updates["issues.limit"] = "--limit"
+	}
+	if flags.PRsLimit != nil {
+		cfg.PRs.Limit = *flags.PRsLimit
+		report.Updates["prs.limit"] = "--limit"
 	}
 	if cfg.Issues.Limit <= 0 || cfg.PRs.Limit <= 0 {
 		return Loaded{}, fmt.Errorf("issues.limit and prs.limit must be positive integers")

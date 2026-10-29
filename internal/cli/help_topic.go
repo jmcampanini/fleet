@@ -2,9 +2,7 @@ package cli
 
 import "github.com/spf13/cobra"
 
-// helpTopicAnnotation marks a command as a help topic, so the grammar and
-// help tests can tell topics from commands that do work.
-const helpTopicAnnotation = "fleet.help-topic"
+const helpTopicGroupID = "help-topics"
 
 // topicHelp is the contract every help topic shares.
 const topicHelp = `This topic prints its text to stdout and nothing to stderr. It never
@@ -16,7 +14,7 @@ prompts and needs no configuration, terminal, CODE_DIR, Git, gh, or network.`
 func newHelpTopic(use, short, long string) *cobra.Command {
 	return &cobra.Command{
 		Use: use, Short: short, Long: long + "\n\n" + topicHelp, Args: cobra.NoArgs,
-		Annotations: map[string]string{helpTopicAnnotation: "true"},
-		RunE:        func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
+		GroupID: helpTopicGroupID,
+		RunE:    func(cmd *cobra.Command, _ []string) error { return writeHelp(cmd) },
 	}
 }

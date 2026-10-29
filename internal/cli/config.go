@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jmcampanini/fleet/internal/config"
+	"github.com/jmcampanini/fleet/internal/exitstatus"
 	"github.com/jmcampanini/go-config-loader/configreporter"
 	"github.com/spf13/cobra"
 )
@@ -19,7 +19,7 @@ layer and validating the inventory, in a form --config can load again.
 is the source; the Overlay layers that produced it cannot be recovered.
 Diagnostics go to stderr. This command never prompts, needs no terminal,
 and runs no Git or GitHub operations. Success exits 0; a configuration
-error exits 2 with empty stdout.
+error exits 2 with empty stdout. An output failure exits 1.
 
 Keys:
   issues.limit
@@ -63,23 +63,19 @@ Example configuration:
   FLEET_ISSUES_LIMIT=30 fleet config --config ./config.toml --provenance`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			path, err := configPath(cmd)
-			if err != nil {
-				return err
-			}
-			loaded, err := config.Load(path)
+			loaded, err := loadConfig(cmd)
 			if err != nil {
 				return err
 			}
 
 			reporter := configreporter.New(loaded.Config, loaded.Report)
 			if err := reporter.WriteTOML(cmd.OutOrStdout()); err != nil {
-				return err
+				return exitstatus.WorkError{Err: err}
 			}
 			if provenance {
 				for _, row := range reporter.ProvenanceRows() {
 					if _, err := fmt.Fprintf(cmd.OutOrStdout(), "# %s\n", strings.Join(quoted(row), " | ")); err != nil {
-						return err
+						return exitstatus.WorkError{Err: err}
 					}
 				}
 			}

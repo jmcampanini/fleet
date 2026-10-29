@@ -12,8 +12,9 @@ and prs reports carry no error text; their failures appear on stderr.
 Field names are lowercase with underscores, except hasMore and nextCursor,
 which keep the camelCase names every data workflow command shares. Empty
 arrays are [], never null.
-Optional strings are omitted when absent. Timestamps are RFC 3339 strings;
-a missing event timestamp is null. Consumers should tolerate added fields.
+Empty error, from, to, state_reason, and nextCursor strings are omitted.
+Timestamps are RFC 3339 strings; a missing event timestamp is null.
+Consumers should tolerate added fields.
 
 Group report:
   groups             Selected groups, sorted alphabetically by name.
@@ -103,7 +104,8 @@ Items:
   merged_at          Timestamp or null: gh mergedAt; null for issues and
                      unmerged pull requests.
 
-CSV output is RFC 4180 with a header row naming the columns above, unless
---no-header. Integers are decimal, timestamps are RFC 3339, and an empty
-string or a null is an empty cell.`)
+CSV uses commas between cells, double quotes around cells when needed,
+doubled embedded double quotes, and LF line endings. A header row names
+the columns above, unless --no-header. Integers are decimal, timestamps
+are RFC 3339, and an empty string or a null is an empty cell.`)
 }

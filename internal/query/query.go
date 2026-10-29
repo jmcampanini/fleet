@@ -4,7 +4,6 @@ package query
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -223,15 +222,13 @@ func (c Client) listRepository(ctx context.Context, id string, options Options, 
 		retrievalSort, retrievalOrder = SortUpdated, OrderDesc
 	}
 	// Ordinary GraphQL listing serves only created descending. Every other
-	// retrieval order goes through gh search, which stops at candidateCap.
-	// Listing past the cap is needed under --all and to reach a cursor's
-	// position, since the items before it count toward the prefix.
+	// retrieval order starts with gh search, which stops at candidateCap.
+	// Fall back to GraphQL listing when search cannot prove completeness.
 	search := retrievalSort != SortCreated || retrievalOrder != OrderDesc
-	capped := search || (!options.All && position == nil)
 	var candidates []Item
 	// gh list exposes a total limit, not a cursor. Expand the ordered prefix
 	// by 100 until the bound proves completeness, or double it when the
-	// prefix may run long, stopping at the cap where one applies.
+	// prefix may run long. Search stops at its cap; GraphQL listing does not.
 	for limit := 100; ; {
 		args := []string{resource, "list", "--repo", id, "--state", string(options.State), "--limit", strconv.Itoa(limit), "--json", fields}
 		if search {
@@ -266,28 +263,24 @@ func (c Client) listRepository(ctx context.Context, id string, options Options, 
 		if len(page) < limit {
 			return candidates, nil
 		}
-		if !options.All && len(candidates) >= options.Limit && bounded(candidates[len(candidates)-1], last, options) {
+		canBound := search || (options.Sort == SortCreated && options.Order == OrderDesc)
+		if !options.All && canBound && len(candidates) >= options.Limit && bounded(candidates[len(candidates)-1], last, options) {
 			return candidates, nil
 		}
-		if capped && limit >= candidateCap {
-			break
+		if search && limit >= candidateCap {
+			search = false
+			retrievalSort, retrievalOrder = SortCreated, OrderDesc
+			continue
 		}
-		if options.All || position != nil {
+		if !search || options.All || position != nil {
 			limit *= 2
 		} else {
 			limit += 100
 		}
-		if capped {
+		if search {
 			limit = min(limit, candidateCap)
 		}
 	}
-	switch {
-	case options.All:
-		return candidates, errors.New("incomplete: reached gh search's 1000-candidate cap before exhausting the repository; --all is uncapped only for created descending order")
-	case position != nil:
-		return candidates, errors.New("incomplete: the cursor lies past the 1000 candidates gh search returns for this order; query directly with gh")
-	}
-	return candidates, errors.New("incomplete: reached the 1000-candidate cap before proving the requested ordering; reduce the limit or query directly with gh")
 }
 
 // bounded reports whether the unseen items, which follow last in retrieval

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"maps"
 	"slices"
 	"strings"
@@ -69,7 +70,10 @@ func ParseCursor(text string, options Options, repos []inventory.Repository) (Cu
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	var cursor Cursor
-	if err := decoder.Decode(&cursor); err != nil || decoder.More() || cursor.Query == "" {
+	if err := decoder.Decode(&cursor); err != nil || cursor.Query == "" {
+		return Cursor{}, ErrCursorInvalid
+	}
+	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
 		return Cursor{}, ErrCursorInvalid
 	}
 	if cursor.Query != fingerprint(options, repos) {
