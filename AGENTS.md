@@ -1,5 +1,8 @@
-- Command help is the canonical user-facing documentation; the README is a landing page. Both stay consistent with observable behavior.
-- Use `mise run check` for local and CI verification. Keep formatting and dependency updates in their separate write-mode tasks.
+- Command help is the canonical user-facing documentation.
+- The README is a landing page.
+- Keep command help and the README consistent with observable behavior.
+- Use `mise run check` for local and CI verification.
+- Keep formatting and dependency updates in their separate write-mode tasks.
 - The `json-reports` help topic in `internal/cli/json_reports.go` is written by hand. Update it in the same change as any edit to the report structs it describes: `checkoutreport.Report`, `checkout.Result`, `checkout.Action`, `query.Report`, `query.Options`, `query.Item`, and `query.RepositoryResult`.
 - Run repository tools through `mise run <task>`.
 - To bump a tool, run `mise upgrade --bump <tool>`, then `mise lock` and `mise run check`.

@@ -15,7 +15,7 @@ func TestLayersAndProvenance(t *testing.T) {
 	if err := os.WriteFile(path, []byte("[issues]\nlimit = 30\n[prs]\nlimit = 20\n[repos.\"github.com/a/one\"]\nbranch = \"develop\"\n[repos.\"github.com/a/two\"]\n[groups]\nall = [\"one\", \"two\", \"a/one\"]\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := Load(path)
+	loaded, err := Load(path, Overrides{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestLayersAndProvenance(t *testing.T) {
 	if err := os.Unsetenv("FLEET_PRS_LIMIT"); err != nil {
 		t.Fatal(err)
 	}
-	roundtrip, err := Load(path)
+	roundtrip, err := Load(path, Overrides{})
 	if err != nil || roundtrip.Config.Issues.Limit != 30 || roundtrip.Config.PRs.Limit != 26 {
 		t.Fatalf("roundtrip = %+v, %v", roundtrip.Config, err)
 	}
@@ -58,7 +58,7 @@ func TestLayersAndProvenance(t *testing.T) {
 func TestMissingDiscoveredFileLoadsDefaults(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
-	loaded, err := Load("")
+	loaded, err := Load("", Overrides{})
 	if err != nil {
 		t.Fatalf("Load(\"\") error = %v, want nil", err)
 	}
@@ -71,10 +71,97 @@ func TestMissingDiscoveredFileLoadsDefaults(t *testing.T) {
 	}
 }
 
+func TestDiscoveryIgnoresRelativeXDGConfigHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Chdir(t.TempDir())
+	path := filepath.Join(home, ".config", "fleet", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("[issues]\nlimit = 23\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join("relative", "fleet"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("relative", "fleet", "config.toml"), []byte("unknown = true\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, base := range []string{"", "relative"} {
+		t.Run(base, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", base)
+
+			loaded, err := Load("", Overrides{})
+
+			if err != nil {
+				t.Fatal(err)
+			}
+			if loaded.Config.Issues.Limit != 23 || len(loaded.Report.LoadedFiles) != 1 || loaded.Report.LoadedFiles[0] != path {
+				t.Errorf("Load with XDG_CONFIG_HOME=%q = %+v, want config from %q", base, loaded, path)
+			}
+		})
+	}
+}
+
+func TestFlagLimitsOverrideBeforeValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		env  string
+	}{
+		{name: "issues", env: "FLEET_ISSUES_LIMIT"},
+		{name: "prs", env: "FLEET_PRS_LIMIT"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "fleet.toml")
+			if err := os.WriteFile(path, []byte("["+tc.name+"]\nlimit = -1\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv(tc.env, "0")
+			limit := 12
+			var flags Overrides
+			if tc.name == "issues" {
+				flags.IssuesLimit = &limit
+			} else {
+				flags.PRsLimit = &limit
+			}
+
+			loaded, err := Load(path, flags)
+
+			if err != nil {
+				t.Fatalf("Load with a valid flag override = %v, want nil", err)
+			}
+			got := loaded.Config.Issues.Limit
+			if tc.name == "prs" {
+				got = loaded.Config.PRs.Limit
+			}
+			if got != 12 {
+				t.Errorf("effective limit = %d, want 12", got)
+			}
+			rows := configreporter.New(loaded.Config, loaded.Report).ProvenanceRows()
+			var provenance []string
+			for _, row := range rows {
+				if row[0] == tc.name+".limit" {
+					provenance = row
+				}
+			}
+			if len(rows) != 2 || strings.Join(provenance, " ") != tc.name+".limit 12 --limit" {
+				t.Errorf("provenance = %v, want %s.limit 12 --limit and the other default", rows, tc.name)
+			}
+
+			limit = 0
+			if _, err := Load(path, flags); err == nil {
+				t.Error("Load with a zero flag limit succeeded")
+			}
+		})
+	}
+}
+
 func TestMissingExplicitPathErrors(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "missing.toml")
 
-	_, err := Load(path)
+	_, err := Load(path, Overrides{})
 	if err == nil || !strings.Contains(err.Error(), path) {
 		t.Fatalf("Load(%q) error = %v, want the missing path", path, err)
 	}
@@ -88,7 +175,7 @@ func TestDirectoryAtDiscoveredPathErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := Load("")
+	_, err := Load("", Overrides{})
 	if err == nil || !strings.Contains(err.Error(), path) {
 		t.Fatalf("Load(\"\") error = %v, want the directory path", err)
 	}
@@ -105,14 +192,14 @@ func TestDiscoveryAndStrictValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := Load(""); err == nil {
+		if _, err := Load("", Overrides{}); err == nil {
 			t.Errorf("Load(%q) succeeded", body)
 		}
 	}
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := Load("")
+	loaded, err := Load("", Overrides{})
 	if err != nil {
 		t.Fatal(err)
 	}

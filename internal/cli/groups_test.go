@@ -145,3 +145,32 @@ func TestGroupsErrorsLeaveStdoutEmpty(t *testing.T) {
 		})
 	}
 }
+
+func TestGroupsOutputFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		config string
+		args   []string
+	}{
+		{name: "text", config: "[groups]\nempty = []\n"},
+		{name: "JSON", args: []string{"--json"}},
+		{name: "no groups diagnostic"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "fleet.toml")
+			if err := os.WriteFile(path, []byte(tc.config), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			root := NewRoot()
+			root.SetArgs(append([]string{"groups", "--config", path}, tc.args...))
+			root.SetOut(failingWriter{})
+			root.SetErr(failingWriter{})
+
+			err := root.ExecuteContext(t.Context())
+
+			if got := exitstatus.ExitCode(err); got != exitstatus.ExitWork {
+				t.Errorf("groups with failed output = %v (exit %d), want exit 1", err, got)
+			}
+		})
+	}
+}

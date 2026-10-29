@@ -256,6 +256,20 @@ func TestLimitPrecedence(t *testing.T) {
 	}
 }
 
+func TestLimitFlagOverridesInvalidConfiguredLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "fleet.toml")
+	if err := os.WriteFile(path, []byte("[groups]\nempty = []\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FLEET_ISSUES_LIMIT", "0")
+
+	out, _, err := execute(t, "issues", "--config", path, "--group", "empty", "--limit", "7")
+
+	if err != nil || !strings.Contains(out, " limit=7 ") {
+		t.Errorf("issues --limit 7 = %q, %v, want the flag to override the zero configured limit", out, err)
+	}
+}
+
 // failingWriter rejects every write.
 type failingWriter struct{}
 

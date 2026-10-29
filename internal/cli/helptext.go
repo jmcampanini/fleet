@@ -11,15 +11,15 @@ const selectionHelp = `Selection:
 
 const configHelp = `Configuration:
   Read $XDG_CONFIG_HOME/fleet/config.toml, or ~/.config/fleet/config.toml
-  when XDG_CONFIG_HOME is empty. Relative XDG_CONFIG_HOME follows
-  go-config-loader and currently resolves against the working directory.
+  when XDG_CONFIG_HOME is empty or relative.
   A missing discovered file is not an error; Fleet then runs with defaults
   and an empty inventory. --config PATH replaces discovery and must name a
   file that exists. No ancestor search runs.
-  Precedence is defaults, TOML, then environment. issues.limit and
-  prs.limit set the default --limit of issues and prs; they default to 15
-  and must be positive. FLEET_ISSUES_LIMIT and FLEET_PRS_LIMIT override
+  Precedence is defaults, TOML, environment, then command flags.
+  issues.limit and prs.limit set the default --limit of issues and prs;
+  they default to 15. FLEET_ISSUES_LIMIT and FLEET_PRS_LIMIT override
   TOML, and each command's --limit overrides both for one run.
+  The effective limits must be positive after applying all layers.
   Inventory and groups come only from TOML. Overlay may compose the file;
   Fleet does not run Overlay or select layers.`
 
@@ -38,11 +38,12 @@ const outputHelp = `Output and dependencies:
   --json instead emits one JSON report after all work, including failures
   and completed actions. Success exits 0.
   Partial or incomplete results exit 1 after the report is written.
+  Output failures also exit 1 and can leave stdout empty or partial.
   Preflight errors exit 2 and leave stdout empty.
   Commands never prompt, read credentials from stdin, or need an interactive
-  terminal. Git and gh must already be authenticated. Each subprocess has a
-  120-second timeout; Git SSH uses batch mode and a 15-second connection
-  timeout.
+  terminal. Git 2.36 or newer and gh 2.50 or newer must already be
+  authenticated. Each subprocess has a 120-second timeout; Git SSH uses
+  batch mode and a 15-second connection timeout.
   Help, version, and shell completion need no configuration or network.
   See 'fleet help exit-codes' for exit status and 'fleet help json-reports'
   for the fields of every --json report and the JSONL and CSV records.`
@@ -102,13 +103,13 @@ Retrieval:
   Enterprise are supported; other hosts fail explicitly. No CODE_DIR or
   local checkout is needed. Created descending uses ordinary GraphQL
   listing; other retrieval orders use gh list's GraphQL search path.
-  Expand 100-item prefixes up to 1000 candidates per repository. For newest
-  closure or merge ordering, updatedAt bounds unseen event times. Continue
-  through ties. Oldest event ordering requires exhausting the candidates.
-  Under --all or --cursor, GraphQL listing doubles the prefix past 1000
-  until it proves the items or exhausts the repository. The search path
-  stops at 1000, counting the items a --cursor skips. Reaching the cap
-  without proving completeness, or under --all, is a failed read of that
-  repository. Failed repositories do not stop other
-  queries. Partial output does not claim to be the newest or oldest across
-  the selection.`
+  Expand 100-item prefixes until enough candidates establish the requested
+  ordering. For newest closure or merge ordering, updatedAt bounds unseen
+  event times. Continue through ties. Oldest event ordering requires
+  exhausting the candidates. Ordinary GraphQL listing has no 1000-item
+  cap. At 1000 search candidates, switch to ordinary created-descending
+  listing and read the entire repository before sorting. This fallback
+  can take longer, even with a small --limit. --all reads every matching
+  item; --cursor resumes after the previous page.
+  Failed repositories do not stop other queries. Partial output does not
+  claim to be the newest or oldest across the selection.`

@@ -31,11 +31,47 @@ func TestHelpAndVersionNeedNoSetup(t *testing.T) {
 	unloadableDiscoveredConfig(t)
 	t.Setenv("CODE_DIR", "")
 	t.Setenv("PATH", "")
-	for _, args := range [][]string{{"--help"}, {"--version"}, {"clone", "--help"}, {"sync", "--help"}, {"repos", "--help"}, {"json-reports"}, {"issues", "--help"}, {"prs", "--help"}, {"config", "--help"}, {"groups", "--help"}, {"completion", "bash"}} {
+	for _, args := range [][]string{{"--help"}, {"--version"}, {"clone", "--help"}, {"sync", "--help"}, {"repos", "--help"}, {"json-reports"}, {"issues", "--help"}, {"prs", "--help"}, {"config", "--help"}, {"groups", "--help"}, {"completion", "bash"}, {"completion", "zsh"}, {"completion", "fish"}, {"completion", "powershell"}} {
 		out, _, err := execute(t, args...)
 		if err != nil || out == "" {
 			t.Errorf("execute(%v) = %q, %v", args, out, err)
 		}
+	}
+}
+
+func TestVersionOutput(t *testing.T) {
+	out, stderr, err := execute(t, "--version")
+	if want := "fleet version " + Version + "\n"; err != nil || stderr != "" || out != want {
+		t.Errorf("--version = %q, %q, %v, want %q", out, stderr, err, want)
+	}
+}
+
+func TestHelpCompletionAndVersionOutputFailures(t *testing.T) {
+	for _, args := range [][]string{nil, {"--help"}, {"help"}, {"help", "issues"}, {"issues", "--help"}, {"exit-codes"}, {"help", "exit-codes"}, {"completion"}, {"--version"}, {"completion", "bash"}, {"completion", "zsh"}, {"completion", "fish"}, {"completion", "powershell"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			root := NewRoot()
+			root.SetArgs(args)
+			root.SetOut(failingWriter{})
+
+			err := runRoot(t.Context(), root)
+
+			if exitstatus.ExitCode(err) != exitstatus.ExitWork {
+				t.Errorf("output failure = %v (exit %d), want exit 1", err, exitstatus.ExitCode(err))
+			}
+		})
+	}
+}
+
+func TestEmptySelectionDiagnosticFailure(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := NewRoot()
+	root.SetArgs([]string{"issues"})
+	root.SetErr(failingWriter{})
+
+	err := runRoot(t.Context(), root)
+
+	if exitstatus.ExitCode(err) != exitstatus.ExitWork {
+		t.Errorf("empty selection diagnostic failure = %v (exit %d), want exit 1", err, exitstatus.ExitCode(err))
 	}
 }
 
@@ -51,21 +87,13 @@ func TestExitCodesTopicListsEveryStatus(t *testing.T) {
 	}
 }
 
-// isHelpTopic reports whether command was built by newHelpTopic.
-func isHelpTopic(command *cobra.Command) bool {
-	return command.Annotations[helpTopicAnnotation] == "true"
-}
-
 // applicationCommands returns every command the repository defines, depth
-// first from the root, skipping the help and completion subtrees cobra adds.
+// first from the root.
 func applicationCommands(t *testing.T) []*cobra.Command {
 	t.Helper()
 	var commands []*cobra.Command
 	var walk func(*cobra.Command)
 	walk = func(command *cobra.Command) {
-		if command.Name() == "help" || command.Name() == "completion" {
-			return
-		}
 		commands = append(commands, command)
 		for _, child := range command.Commands() {
 			walk(child)
@@ -80,7 +108,7 @@ func TestEveryApplicationCommandDeclaresItsGrammar(t *testing.T) {
 		if command.HasParent() && command.Args == nil {
 			t.Errorf("%s declares no Args", command.CommandPath())
 		}
-		if command.HasParent() && (command.HasSubCommands() || isHelpTopic(command)) && !command.Runnable() {
+		if command.HasParent() && (command.HasSubCommands() || command.GroupID == helpTopicGroupID) && !command.Runnable() {
 			t.Errorf("%s is a command group or help topic but is not runnable", command.CommandPath())
 		}
 	}
@@ -92,9 +120,17 @@ func TestEveryApplicationCommandDeclaresItsGrammar(t *testing.T) {
 	if !root.DisableSuggestions {
 		t.Error("root does not set DisableSuggestions")
 	}
+	if root.Version != "" {
+		t.Error("root sets Cobra Version; Fleet owns the version flag")
+	}
 	for _, name := range []string{"help", "version"} {
 		if root.Flags().Lookup(name) == nil {
 			t.Errorf("root lacks the --%s flag before execution", name)
+		}
+	}
+	for _, command := range root.Commands() {
+		if command.GroupID != "commands" && command.GroupID != helpTopicGroupID {
+			t.Errorf("%s group = %q, want a command or help topic group", command.Name(), command.GroupID)
 		}
 	}
 }
@@ -120,7 +156,7 @@ func TestEveryApplicationCommandHasHelpWithin80Columns(t *testing.T) {
 				}
 			}
 
-			if !isHelpTopic(command) {
+			if command.GroupID != helpTopicGroupID {
 				return
 			}
 			for _, invocation := range [][]string{path, append([]string{"help"}, path...)} {

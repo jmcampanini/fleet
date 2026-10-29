@@ -3,7 +3,7 @@
 
 ## Supported versions
 
-Fleet is supported only at the latest commit on the `main` branch. There are no stable releases or supported older versions.
+Security fixes are applied to `main`. Upgrade to a release containing the fix or build from `main`.
 
 
 ## Reporting a vulnerability

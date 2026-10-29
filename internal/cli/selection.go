@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/jmcampanini/fleet/internal/config"
+	"github.com/jmcampanini/fleet/internal/exitstatus"
 	"github.com/jmcampanini/fleet/internal/inventory"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -23,11 +24,7 @@ func (s *selection) bind(flags *pflag.FlagSet) {
 // in complete-identity order. An empty selection is reported on stderr and
 // returned as is; callers decide whether that is an error.
 func (s selection) resolve(cmd *cobra.Command, refs []string) (config.Loaded, []inventory.Repository, error) {
-	path, err := configPath(cmd)
-	if err != nil {
-		return config.Loaded{}, nil, err
-	}
-	loaded, err := config.Load(path)
+	loaded, err := loadConfig(cmd)
 	if err != nil {
 		return config.Loaded{}, nil, err
 	}
@@ -38,7 +35,7 @@ func (s selection) resolve(cmd *cobra.Command, refs []string) (config.Loaded, []
 
 	if len(repos) == 0 {
 		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "No repositories selected."); err != nil {
-			return config.Loaded{}, nil, err
+			return config.Loaded{}, nil, exitstatus.WorkError{Err: err}
 		}
 	}
 	return loaded, repos, nil

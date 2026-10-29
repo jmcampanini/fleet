@@ -3,17 +3,31 @@ package cli
 import (
 	"fmt"
 
+	"github.com/jmcampanini/fleet/internal/config"
 	"github.com/spf13/cobra"
 )
 
-// configPath reads the root --config flag and rejects an explicit empty path.
-func configPath(cmd *cobra.Command) (string, error) {
+func loadConfig(cmd *cobra.Command) (config.Loaded, error) {
 	path, err := cmd.Flags().GetString("config")
 	if err != nil {
-		return "", err
+		return config.Loaded{}, err
 	}
 	if cmd.Flags().Changed("config") && path == "" {
-		return "", fmt.Errorf("--config requires a nonempty file path")
+		return config.Loaded{}, fmt.Errorf("--config requires a nonempty file path")
 	}
-	return path, nil
+
+	var flags config.Overrides
+	if cmd.Flags().Changed("limit") {
+		limit, err := cmd.Flags().GetInt("limit")
+		if err != nil {
+			return config.Loaded{}, err
+		}
+		switch cmd.Name() {
+		case "issues":
+			flags.IssuesLimit = &limit
+		case "prs":
+			flags.PRsLimit = &limit
+		}
+	}
+	return config.Load(path, flags)
 }
