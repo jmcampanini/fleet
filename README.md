@@ -74,7 +74,6 @@ export PATH="$HOME/.local/bin:$PATH"
 | `fleet prs --state merged --json` | Emit the most recently merged pull requests as one JSON report. |
 | `fleet prs --state merged --all --csv --output-file merged.csv` | Save every merged pull request to a new CSV file. |
 | `fleet groups --group agents` | List the resolved repository members of a configured group. |
-| `fleet config --provenance` | Print the effective configuration with each field's source. |
 
 The canonical reference is `fleet --help`, each command's `--help`, and the help topics `fleet help exit-codes` and `fleet help json-reports`.
 
